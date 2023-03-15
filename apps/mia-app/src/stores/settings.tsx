@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist, devtools } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
+import { Settings } from '../backend/models'
+import { miaService } from '../backend/service'
 
 export interface OpenAiProfile {
   name: string
@@ -9,25 +11,17 @@ export interface OpenAiProfile {
   desc?: string
 }
 
-interface Settings {
+type SettingsStore = {
   ui: {
     mainDrawerOpened: boolean
   }
 
-  apiClient: {
-    usedOpenaiProfile: OpenAiProfile
-  }
-
-  openaiProfiles: OpenAiProfile[]
-}
-
-interface SettingsActions {
   addOpenAiProfile(profile: OpenAiProfile): void
   setOpenaiProfile(profile: OpenAiProfile): void
   openMainDrawer(): void
   closeMainDrawer(): void
   toggleMainDrawer(): void
-}
+} & Settings
 
 const defaultOpenaiProfiles: OpenAiProfile[] = [
   {
@@ -36,8 +30,6 @@ const defaultOpenaiProfiles: OpenAiProfile[] = [
     apiKey: '',
   },
 ]
-
-export type SettingsStore = SettingsActions & Settings
 
 const settingsStoreCreator = immer<SettingsStore>((set, get) => ({
   ui: {
@@ -89,3 +81,14 @@ export const useSettingsStore = create(
     }
   )
 )
+
+function init() {
+  miaService.updateSettings(useSettingsStore.getState())
+  useSettingsStore.subscribe((settings, prevSettings) => {
+    if (settings.apiClient !== prevSettings.apiClient) {
+      miaService.updateSettings(settings)
+    }
+  })
+}
+
+init()

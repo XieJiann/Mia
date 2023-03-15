@@ -24,10 +24,15 @@ import ChatMessageItem from './ChatMessageItem'
 export function ChatPanel(props: { chat: chat_t.Chat }) {
   const { chat } = props
 
-  const [sendChatMessageStream, regenerateMessageStream] = useChatStore(
-    (s) => [s.sendNewMessageStream, s.regenerateMessageStream],
-    shallow
-  )
+  const [sendChatMessageStream, regenerateMessageStream, stopGenerateMessage] =
+    useChatStore(
+      (s) => [
+        s.sendNewMessageStream,
+        s.regenerateMessageStream,
+        s.stopGenerateMessage,
+      ],
+      shallow
+    )
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -130,6 +135,9 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
                     message={message}
                     onRegenerate={() => {
                       handleRegenerateMessage({ messageId: message.id })
+                    }}
+                    onStopGenerate={() => {
+                      stopGenerateMessage({ messageId: message.id })
                     }}
                   />
                 )

@@ -8,7 +8,7 @@ import {
   lazy,
   json,
 } from '@nozbe/watermelondb/decorators'
-import { Model, tableSchema, appSchema } from '@nozbe/watermelondb'
+import { Model, tableSchema, appSchema, Relation } from '@nozbe/watermelondb'
 import { Q, Query } from '@nozbe/watermelondb'
 
 export const schema = appSchema({
@@ -86,7 +86,7 @@ function sanitizeChatTokenUsage(data: object = {}): ChatTokenUsage {
 export class ChatModel extends Model {
   static table = 'chats'
   static associations = {
-    messages: { type: 'has_many' as 'has_many', foreignKey: 'chat_id' },
+    chat_messages: { type: 'has_many' as 'has_many', foreignKey: 'chat_id' },
   }
 
   @text('name') name!: string
@@ -110,6 +110,17 @@ export class ChatModel extends Model {
 
   @date('deleted_at')
   deletedAt?: Date
+
+  getRawObject(): ChatMeta {
+    return {
+      id: this.id,
+      name: this.name,
+      tokenUsage: this.tokenUsage,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      deletedAt: this.deletedAt,
+    }
+  }
 }
 
 export class ChatMessageModel extends Model {
@@ -118,7 +129,7 @@ export class ChatMessageModel extends Model {
     chat: { type: 'belongs_to' as 'belongs_to', key: 'chat_id' },
   }
 
-  @immutableRelation('chats', 'chat_id') chat!: ChatModel
+  @immutableRelation('chats', 'chat_id') chat!: Relation<ChatModel>
 
   @text('content') content!: string
   @field('role') role!: 'system' | 'user' | 'assistant'
@@ -142,6 +153,23 @@ export class ChatMessageModel extends Model {
 
   @date('deleted_at')
   deletedAt?: Date
+
+  getRawObject(): ChatMessage {
+    return {
+      id: this.id,
+      content: this.content,
+      chat: {
+        id: this.chat.id as string,
+      },
+      role: this.role,
+      actionsHidden: this.actionsHidden,
+      loadingStatus: this.loadingStatus,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      hiddenAt: this.hiddenAt,
+      deletedAt: this.deletedAt,
+    }
+  }
 }
 
 export class PromptModel extends Model {
@@ -180,14 +208,44 @@ export class CharacterModel extends Model {
 
   @date('deleted_at')
   deletedAt?: Date
+
+  getRawObject(): Character {
+    return {
+      id: this.id,
+      name: this.name,
+      avatarUrl: this.avatarUrl,
+      descriptionPrompt: this.descriptionPrompt,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      deletedAt: this.deletedAt,
+    }
+  }
+}
+
+// Model Raw Types
+export type Character = ExtractModelType<CharacterModel>
+
+export type Chat = ChatMeta & {
+  messages: ChatMessage[]
+}
+
+export type ChatMeta = Omit<ExtractModelType<ChatModel>, 'messages'>
+
+export type ChatMessage = Omit<ExtractModelType<ChatMessageModel>, 'chat'> & {
+  chat: { id: string }
 }
 
 // @see https://stackoverflow.com/questions/53501721/typescript-exclude-property-key-when-starts-with-target-string
-export type ExtractModelType<T extends Model> = Omit<
+
+export type ExtractModelType<T extends Model> = ExtractModelTypeImpl<T>
+
+type ExtractModelTypeImpl<T extends Model> = Omit<
   {
-    [P in keyof T]: T[P] extends Query<infer R> ? ExtractModelType<R>[] : T[P]
+    [P in keyof T]: T[P] extends Query<infer R>
+      ? ExtractModelTypeImpl<R>[]
+      : T[P]
   },
-  Exclude<keyof Model, 'id'>
+  Exclude<keyof Model, 'id'> | 'getRawObject'
 >
 
 export interface OpenAiProfile {
@@ -199,6 +257,8 @@ export interface OpenAiProfile {
 
 export interface Settings {
   apiClient: {
-    currentOpenaiProfile: OpenAiProfile
+    usedOpenaiProfile: OpenAiProfile
   }
+
+  openaiProfiles: OpenAiProfile[]
 }

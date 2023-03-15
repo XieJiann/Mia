@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "useDefineForClassFields": true,
+    // use false for watermelondb
+    "useDefineForClassFields": false,
     "lib": [
       "DOM",
       "DOM.Iterable",

@@ -8,12 +8,13 @@ import { Result } from '../types'
 
 const defaultSettings: models.Settings = {
   apiClient: {
-    currentOpenaiProfile: {
+    usedOpenaiProfile: {
       name: 'openai-offical',
       endpoint: 'https://api.openai.com',
       apiKey: '',
     },
   },
+  openaiProfiles: [],
 }
 
 export type ListFilters = {
@@ -43,6 +44,10 @@ export function createDefaultListPage<T>(filters: ListFilters): ListPage<T> {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export type ListPage<T> = {
   data: T[]
   total: number
@@ -51,30 +56,32 @@ export type ListPage<T> = {
   loading: boolean
 }
 
-export type Character = models.ExtractModelType<models.CharacterModel>
+import type { Character, Chat, ChatMessage, ChatMeta } from './models'
+export type { Character, Chat, ChatMessage, ChatMeta }
 
-export type Chat = models.ExtractModelType<models.ChatModel>
-
-export type ChatMeta = Omit<Chat, 'messages'>
-
-export type ChatMessage = models.ExtractModelType<models.ChatMessageModel>
+interface MessageStreamCallbacks {
+  onMessageUpdated: (messageId: string) => void
+  onChatUpdated: (chatId: string) => void
+}
 
 export class MiaService {
   private chatTable = database.get<models.ChatModel>('chats')
   private characterTable = database.get<models.CharacterModel>('characters')
+  private messageTable = database.get<models.ChatMessageModel>('chat_messages')
   private settings: models.Settings = defaultSettings
   private openaiClient: OpenAIClient
 
   constructor() {
     this.openaiClient = new OpenAIClient(
-      this.settings.apiClient.currentOpenaiProfile
+      this.settings.apiClient.usedOpenaiProfile
     )
   }
 
   updateSettings(settings: models.Settings) {
+    console.log('updateSettings', settings)
     this.settings = settings
     this.openaiClient = new OpenAIClient(
-      this.settings.apiClient.currentOpenaiProfile
+      this.settings.apiClient.usedOpenaiProfile
     )
   }
 
@@ -145,7 +152,7 @@ export class MiaService {
     const data = await this.chatTable.query(...queryFilters).fetch()
 
     return {
-      data,
+      data: data.map((c) => c.getRawObject()),
       currentPage,
       pageSize,
       total,
@@ -155,8 +162,14 @@ export class MiaService {
 
   async getChatById(id: string): Promise<Chat> {
     const chat = await this.chatTable.find(id)
-    const messages = await chat.messages.fetch()
-    return { ...chat, id: chat.id, messages }
+    const messages = await chat.messages
+      .extend(Q.sortBy('created_at', 'asc'))
+      .fetch()
+
+    return {
+      ...chat.getRawObject(),
+      messages: messages.map((m) => m.getRawObject()),
+    }
   }
 
   async createChat(p: { name?: string }): Promise<ChatMeta> {
@@ -176,15 +189,17 @@ export class MiaService {
       }
     }
 
-    return database.write(async () => {
+    const chat = await database.write(async () => {
       return this.chatTable.create((c) => {
         c.name = name
       })
     })
+
+    return chat.getRawObject()
   }
 
   async updateChat(id: string, p: { name?: string }): Promise<ChatMeta> {
-    return database.write(async () => {
+    const chat = await database.write(async () => {
       const chat = await this.chatTable.find(id)
       return await chat.update((c) => {
         if (p.name) {
@@ -192,6 +207,7 @@ export class MiaService {
         }
       })
     })
+    return chat.getRawObject()
   }
 
   async deleteChat(id: string): Promise<void> {
@@ -203,22 +219,120 @@ export class MiaService {
     })
   }
 
-  async sendNewMessageStream(p: {
-    chatId: string
-    content: string
-  }): Promise<Result<boolean>> {
+  // messages
+  async getMessageById(id: string): Promise<ChatMessage> {
+    const message = await this.messageTable.find(id)
+    return message.getRawObject()
+  }
+
+  async stopGenerateMessage(p: { messageId: string }) {
+    // TODO: stop stream job
+    await database.write(async () => {
+      const message = await this.messageTable.find(p.messageId)
+      if (!message) {
+        return
+      }
+
+      message.update((m) => {
+        if (m.loadingStatus != 'error') {
+          m.loadingStatus = 'ok'
+        }
+      })
+    })
+  }
+
+  async regenerateMessageStream(
+    p: {
+      messageId: string
+      chatId: string
+    } & MessageStreamCallbacks
+  ): Promise<Result<boolean>> {
     const chat = await this.chatTable.find(p.chatId)
     if (!chat) {
       return { ok: false, error: new Error('Chat not found') }
     }
 
-    const history = await chat.messages
-      .extend(
-        Q.sortBy('created_at', 'asc'),
-        Q.where('hidden_at', null),
-        Q.where('deleted_at', null)
-      )
+    const message = await this.messageTable.find(p.messageId)
+    if (!message) {
+      return { ok: false, error: new Error('Message not found') }
+    }
+    if (message.role !== 'assistant') {
+      return {
+        ok: false,
+        error: new Error(
+          `message is not assistant message, got=${message.role}`
+        ),
+      }
+    }
+
+    if (message.deletedAt || message.hiddenAt) {
+      return {
+        ok: false,
+        error: new Error(`message is either hidden or deleted`),
+      }
+    }
+
+    await database.write(async () => {
+      await message.update((m) => {
+        m.content = ''
+        m.loadingStatus = 'wait_first'
+      })
+    })
+
+    p.onMessageUpdated(message.id)
+
+    const history = await this._queryFilteredHistory(chat)
+      .extend(Q.where('created_at', Q.lt(message.createdAt.getTime())))
       .fetch()
+    const toSendMessages = [
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+    ]
+
+    const resp = await this._handleSendMessageStream({
+      chat,
+      replyMessage: message,
+      toSendMessages,
+      ...p,
+    })
+
+    return resp
+  }
+
+  async sendNewMessageStream(
+    p: {
+      chatId: string
+      content: string
+    } & MessageStreamCallbacks
+  ): Promise<Result<boolean>> {
+    const chat = await this.chatTable.find(p.chatId)
+    if (!chat) {
+      return { ok: false, error: new Error('Chat not found') }
+    }
+
+    const history = await this._queryFilteredHistory(chat).fetch()
+
+    // added message
+    const { replyMsg } = await database.write(async () => {
+      await this.messageTable.create((m) => {
+        m.chat.id = chat.id
+        m.role = 'user'
+        m.content = p.content
+      })
+
+      // sleep 2ms to use different timestamp
+      await sleep(2)
+
+      const replyMsg = await this.messageTable.create((m) => {
+        m.chat.id = chat.id
+        m.role = 'assistant'
+        m.content = ''
+        m.loadingStatus = 'wait_first'
+      })
+
+      return { replyMsg }
+    })
+
+    p.onChatUpdated(chat.id)
 
     const toSendMessages: api_t.ChatCompletionMessage[] = [
       ...history.map((m) => ({
@@ -231,7 +345,76 @@ export class MiaService {
       },
     ]
 
+    return this._handleSendMessageStream({
+      chat,
+      replyMessage: replyMsg,
+      toSendMessages,
+      ...p,
+    })
+  }
+
+  private async _handleSendMessageStream(
+    p: {
+      chat: models.ChatModel
+      replyMessage: models.ChatMessageModel
+      toSendMessages: api_t.ChatCompletionMessage[]
+    } & MessageStreamCallbacks
+  ): Promise<Result<boolean>> {
+    const handleStream = async (
+      events: api_t.CreateChatCompletionsReplyEventData[]
+    ) => {
+      let newContent = ''
+      for (const event of events) {
+        newContent += event.choices[0].delta.content || ''
+      }
+
+      await database.write(async () => {
+        await p.replyMessage.update((m) => {
+          if (m.loadingStatus === 'wait_first') {
+            m.loadingStatus = 'loading'
+          }
+          m.content += newContent
+        })
+      })
+
+      p.onMessageUpdated(p.replyMessage.id)
+    }
+
+    const resp = await this.openaiClient.createChatCompletionsStream(
+      {
+        model: 'gpt-3.5-turbo',
+        messages: p.toSendMessages,
+      },
+      handleStream
+    )
+
+    if (!resp.ok) {
+      await database.write(() =>
+        p.replyMessage.update((m) => {
+          m.loadingStatus = 'error'
+        })
+      )
+
+      p.onMessageUpdated(p.replyMessage.id)
+      return { ok: false, error: resp.error }
+    }
+
+    await database.write(() =>
+      p.replyMessage.update((m) => {
+        m.loadingStatus = 'ok'
+      })
+    )
+
+    p.onMessageUpdated(p.replyMessage.id)
     return { ok: true, value: true }
+  }
+
+  private _queryFilteredHistory(chat: models.ChatModel) {
+    return chat.messages.extend(
+      Q.sortBy('created_at', 'asc'),
+      Q.where('hidden_at', null),
+      Q.where('deleted_at', null)
+    )
   }
 }
 

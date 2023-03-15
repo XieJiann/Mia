@@ -20,20 +20,19 @@ import { shallow } from '../stores'
 import { useChatStore } from '../stores/chat'
 
 export function DrawerChatList() {
-  const [getRandomCharacter, createChat, deleteChat] = useChatStore(
-    (s) => [s.getRandomCharacter, s.createChat, s.deleteChat],
+  const [createChat, deleteChat] = useChatStore(
+    (s) => [s.createChat, s.deleteChat],
     shallow
   )
 
   const currentChatId = useCurrentChatId()
   const navigate = useNavigate()
-  const sortedChats = useChatStore((s) => s.listChats({ sortBy: 'updatedAt' }))
+  const sortedChats = useChatStore((s) =>
+    s.listChats({ orderBy: 'updated_at' })
+  )
 
-  const handleCreateChat = useMemoizedFn(() => {
-    const chara = getRandomCharacter()
-    const chat = createChat({
-      character: chara,
-    })
+  const handleCreateChat = useMemoizedFn(async () => {
+    const chat = await createChat({})
 
     navigate(`/chats/${chat.id}`, { replace: false })
   })
@@ -69,7 +68,7 @@ export function DrawerChatList() {
             <ListItemText primary={'Add Chat'} />
           </ListItemButton>
         </ListItem>
-        {sortedChats.map((chat) => (
+        {sortedChats.data.map((chat) => (
           <ListItem
             key={chat.id}
             secondaryAction={

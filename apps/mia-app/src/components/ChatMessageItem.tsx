@@ -22,10 +22,12 @@ import ChatMessageContentView from './ChatMessageContentView'
 interface ChatMessageActionsProps {
   message: chat_t.ChatMessage
   onRegenerate: () => void
+  onStopGenerate: () => void
 }
 function ChatMessageActions({
   message,
   onRegenerate,
+  onStopGenerate,
 }: ChatMessageActionsProps) {
   const [copied, setCopied] = useState<boolean>(false)
 
@@ -38,7 +40,7 @@ function ChatMessageActions({
   const renderGenerateButton = () => {
     if (isLoading) {
       return (
-        <IconButton size="small" color="error">
+        <IconButton size="small" color="error" onClick={onStopGenerate}>
           <CancelIcon fontSize="inherit" />
         </IconButton>
       )
@@ -77,6 +79,7 @@ function ChatMessageActions({
 export default function ChatMessageItem({
   message,
   onRegenerate,
+  onStopGenerate,
 }: {
   message: chat_t.ChatMessage
 } & ChatMessageActionsProps) {
@@ -118,7 +121,11 @@ export default function ChatMessageItem({
         {!isUser && (
           <>
             <Divider sx={{ mt: '8px' }} />{' '}
-            <ChatMessageActions onRegenerate={onRegenerate} message={message} />{' '}
+            <ChatMessageActions
+              onRegenerate={onRegenerate}
+              onStopGenerate={onStopGenerate}
+              message={message}
+            />{' '}
           </>
         )}
       </Paper>

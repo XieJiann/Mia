@@ -58,6 +58,8 @@ export type ChatStore = {
 
   deleteChat(id: string): Promise<void>
 
+  stopGenerateMessage(p: { messageId: string }): Promise<void>
+
   sendNewMessageStream(p: {
     chatId: string
     content: string
@@ -70,33 +72,6 @@ export type ChatStore = {
 }
 
 function createChatStore() {
-  const idGenerator = new ShortUniqueId()
-
-  // TODO: find a better way to retrieve the deps
-  const getOpenaiClient = () => {
-    // below function is not reactive
-    // @see https://github.com/pmndrs/zustand/discussions/630
-    const openaiProfile =
-      useSettingsStore.getState().apiClient.usedOpenaiProfile
-    const openaiClient = new OpenAIClient(openaiProfile)
-
-    return openaiClient
-  }
-
-  const postprocessMessages = (p: {
-    historyMessages: api_t.ChatCompletionMessage[]
-    newMessage?: api_t.ChatCompletionMessage
-    mustHaveMessages: api_t.ChatCompletionMessage[]
-  }) => {
-    // TODO: when shrinking the content, we should consider the must have messages
-
-    if (p.newMessage) {
-      return [...p.historyMessages, p.newMessage]
-    }
-
-    return p.historyMessages
-  }
-
   return immer<ChatStore>((set, get) => {
     const handleRefreshViews = () => {
       const view = get().chatsView
@@ -119,66 +94,25 @@ function createChatStore() {
       })
     }
 
-    const handleSendMessageStream = async (p: {
-      chatId: string
-      messageId: string
-      sendMessages: api_t.ChatCompletionMessage[]
-    }): Promise<Result<boolean>> => {
-      const openaiClient = getOpenaiClient()
-
-      const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
-      if (chatIdx === -1) {
-        return {
-          ok: false,
-          error: new Error(`chat not found, id: ${p.chatId}`),
-        }
-      }
-
-      const recvMessageIndex = get().chats[chatIdx].messages.findIndex(
-        (m) => m.id === p.messageId
-      )
-
-      const handleStream = (
-        events: api_t.CreateChatCompletionsReplyEventData[]
-      ) => {
-        set((s) => {
-          const chat = s.chats[chatIdx]
-
-          const message = chat.messages[recvMessageIndex]
-
-          if (message.loadingStatus === 'wait_first') {
-            message.loadingStatus = 'loading'
-          }
-
-          let newContent = ''
-          // append content
-          for (const event of events) {
-            newContent += event.choices[0].delta.content || ''
-          }
-
-          message.content += newContent
-        })
-      }
-
-      const resp = await openaiClient.createChatCompletionsStream(
-        { model: 'gpt-3.5-turbo', messages: p.sendMessages },
-        handleStream
-      )
-
-      if (!resp.ok) {
-        set((s) => {
-          const message = s.chats[chatIdx].messages[recvMessageIndex]
-          message.loadingStatus = 'error'
-        })
-        return { ok: false, error: resp.error }
+    const handleRefreshMessage = async (messageId: string) => {
+      const message = await miaService.getMessageById(messageId)
+      if (!message) {
+        return
       }
 
       set((s) => {
-        const message = s.chats[chatIdx].messages[recvMessageIndex]
-        message.loadingStatus = 'ok'
-      })
+        const chat = s.chats[message.chat.id]
+        if (!chat) {
+          return
+        }
 
-      return { ok: true, value: true }
+        const index = chat.messages.findIndex((m) => m.id === messageId)
+        if (index < 0) {
+          return
+        }
+
+        chat.messages[index] = message
+      })
     }
 
     return {
@@ -238,127 +172,37 @@ function createChatStore() {
         handleRefreshChat(id)
       },
 
+      async stopGenerateMessage(p) {
+        await miaService.stopGenerateMessage(p)
+        handleRefreshMessage(p.messageId)
+      },
+
       async sendNewMessageStream(p: {
         chatId: string
         content: string
       }): Promise<Result<boolean>> {
-        const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
-
-        if (chatIdx === -1) {
-          throw new Error(`chat not found, id: ${p.chatId}`)
-        }
-
-        const userMessage: api_t.ChatCompletionMessage = {
-          role: 'user',
-          content: p.content,
-        }
-
-        const chat = get().chats[chatIdx]
-        const messages = postprocessMessages({
-          historyMessages: filterValidHistories(chat.messages).map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          newMessage: userMessage,
-          mustHaveMessages: [],
+        const resp = await miaService.sendNewMessageStream({
+          ...p,
+          onChatUpdated(chatId) {
+            handleRefreshChat(chatId)
+          },
+          onMessageUpdated(messageId) {
+            handleRefreshMessage(messageId)
+          },
         })
-
-        const replyMessageId = idGenerator.randomUUID(8)
-
-        const newlyAddedMessage = [
-          createChatMessageData({
-            id: idGenerator.randomUUID(8),
-            createdAt: getNowTimestamp(),
-            ...userMessage,
-          }),
-          createChatMessageData({
-            id: replyMessageId,
-            createdAt: getNowTimestamp(),
-            role: 'assistant',
-            content: '',
-          }),
-        ]
-
-        set((s) => {
-          const chat = s.chats[chatIdx]
-
-          // push user & reply message to history
-          chat.messages.push(...newlyAddedMessage)
-        })
-
-        const resp = await handleSendMessageStream({
-          chatId: p.chatId,
-          messageId: replyMessageId,
-          sendMessages: messages,
-        })
-
         return resp
       },
 
       async regenerateMessageStream(p) {
-        const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
-        if (chatIdx === -1) {
-          return {
-            ok: false,
-            error: new Error(`chat not found, id: ${p.chatId}`),
-          }
-        }
-
-        const chat = get().chats[chatIdx]
-
-        const messageIndex = chat.messages.findIndex(
-          (m) => m.id === p.messageId
-        )
-        if (messageIndex === -1) {
-          return {
-            ok: false,
-            error: new Error(`message not found, id: ${p.messageId}`),
-          }
-        }
-
-        const message = chat.messages[messageIndex]
-        if (message.role !== 'assistant') {
-          return {
-            ok: false,
-            error: new Error(
-              `message is not assistant message, got=${message.role}`
-            ),
-          }
-        }
-
-        if (message.deletedAt || message.hiddenAt) {
-          return {
-            ok: false,
-            error: new Error(`message is either hidden or deleted`),
-          }
-        }
-
-        set((s) => {
-          const chat = s.chats[chatIdx]
-
-          // push reply message to history
-          const message = chat.messages[messageIndex]
-          message.content = ''
-          message.loadingStatus = 'wait_first'
-          message.createdAt = getNowTimestamp()
-        })
-
-        const historyMessages = filterValidHistories(
-          chat.messages.slice(0, messageIndex)
-        )
-        console.log(`message_indx=`, messageIndex, historyMessages)
-        const messages = postprocessMessages({
-          historyMessages: historyMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          mustHaveMessages: chat.mustHaveMessages,
-        })
-
-        const resp = await handleSendMessageStream({
-          chatId: p.chatId,
-          messageId: p.messageId,
-          sendMessages: messages,
+        // more fine-grained refresh
+        const resp = await miaService.regenerateMessageStream({
+          ...p,
+          onChatUpdated(chatId) {
+            handleRefreshChat(chatId)
+          },
+          onMessageUpdated(messageId) {
+            handleRefreshMessage(messageId)
+          },
         })
         return resp
       },
@@ -366,8 +210,4 @@ function createChatStore() {
   })
 }
 
-export const useChatStore = create(
-  persist(createChatStore(), {
-    name: 'mia-chats',
-  })
-)
+export const useChatStore = create(createChatStore())
