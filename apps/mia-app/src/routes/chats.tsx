@@ -19,7 +19,7 @@ import {
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import BaseAppBar from '../components/BaseAppBar'
-import { Chat, useChatStore } from '../stores/chat'
+import { Chat, ChatMeta, useChatStore } from '../stores/chat'
 import { FixedSizeList, ListChildComponentProps } from 'react-window'
 import { shallow } from 'zustand/shallow'
 import { useState } from 'react'
@@ -31,7 +31,7 @@ function ChatListItem({
   onDeleteChat,
   onSelectChat,
 }: {
-  chat: Chat
+  chat: ChatMeta
   onDeleteChat: (id: string) => void
   onSelectChat: (id: string) => void
 }) {
@@ -100,17 +100,20 @@ function ChatListItem({
 }
 
 export default function ChatListPage() {
-  const [createChat, deleteChat, updateChat, getRandomCharacter] = useChatStore(
-    (s) => [s.createChat, s.deleteChat, s.updateChat, s.getRandomCharacter]
-  )
+  const [createChat, deleteChat, updateChat] = useChatStore((s) => [
+    s.createChat,
+    s.deleteChat,
+    s.updateChat,
+  ])
 
-  const sortedChats = useChatStore((s) => s.listChats({ sortBy: 'updatedAt' }))
+  const sortedChats = useChatStore((s) =>
+    s.listChats({ orderBy: 'updated_at' })
+  )
 
   const navigate = useNavigate()
 
   const handleCreateChat = () => {
-    const character = getRandomCharacter()
-    createChat({ character })
+    createChat({})
   }
 
   const handleSelectChat = (id: string) => {
@@ -136,7 +139,7 @@ export default function ChatListPage() {
               <ListItemText primary={'Add Chat'} />
             </ListItemButton>
           </ListItem>
-          {sortedChats.map((chat) => (
+          {sortedChats.data.map((chat) => (
             <>
               <Divider key={`div-${chat.id}`} component="li" />
               <ChatListItem

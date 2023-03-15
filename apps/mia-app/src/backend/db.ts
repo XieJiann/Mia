@@ -1,9 +1,13 @@
-import { appSchema, tableSchema, Database } from '@nozbe/watermelondb'
+import { Database } from '@nozbe/watermelondb'
 import { schemaMigrations } from '@nozbe/watermelondb/Schema/migrations'
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs'
-import { Chat, ChatMessage, Prompt, schema } from './models'
-
-export * as models from './models'
+import {
+  ChatModel,
+  ChatMessageModel,
+  PromptModel,
+  schema,
+  CharacterModel,
+} from './models'
 
 const migrations = schemaMigrations({
   migrations: [],
@@ -19,7 +23,7 @@ const adapter = new LokiJSAdapter({
 
 const database = new Database({
   adapter,
-  modelClasses: [Chat, ChatMessage, Prompt],
+  modelClasses: [ChatModel, ChatMessageModel, PromptModel, CharacterModel],
 })
 
 export { database }

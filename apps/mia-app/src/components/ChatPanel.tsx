@@ -131,7 +131,6 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
                     onRegenerate={() => {
                       handleRegenerateMessage({ messageId: message.id })
                     }}
-                    character={chat.character}
                   />
                 )
               })}

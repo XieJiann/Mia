@@ -3,80 +3,23 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { api_t, OpenAIClient } from '../api'
+import {
+  ChatMessage,
+  Chat,
+  ChatMeta,
+  ListFilters,
+  ListPage,
+  miaService,
+  ListFiltersToString,
+  createDefaultListPage,
+  ListFiltersFromString,
+} from '../backend/service'
 import { Result } from '../types'
-import { DateTime, getNowTimestamp } from '../types/model'
-import { makeDataCreator } from '../utils'
+import { getNowTimestamp } from '../types/model'
 import { useSettingsStore } from './settings'
 
 export type ChatRole = 'user' | 'assistant' | 'system'
-
-export interface Character {
-  id: string
-  name: string
-  desc: string
-}
-
-type ChatMessageLoadingStatus = 'wait_first' | 'loading' | 'ok' | 'error'
-
-export interface ChatMessage {
-  id: string
-  content: string
-  role: ChatRole
-
-  createdAt?: DateTime
-  // hidden
-  hiddenAt?: DateTime
-  deletedAt?: DateTime
-
-  // ui related
-  loadingStatus: ChatMessageLoadingStatus
-  actionsHidden: boolean
-}
-
-export interface Chat {
-  id: string
-  name: string
-  character: Character
-  messages: ChatMessage[]
-  mustHaveMessages: ChatMessage[]
-  totalUsage: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-
-  // ISO 8601
-  createdAt: DateTime
-  updatedAt: DateTime
-  deletedAt?: DateTime
-}
-
-const createChatData = makeDataCreator<Chat>({
-  id: 'chat',
-  name: 'Chat',
-  character: {
-    id: 'a1',
-    name: 'Mia',
-    desc: 'Mia is a cat girl',
-  },
-  messages: [],
-  mustHaveMessages: [],
-  totalUsage: {
-    promptTokens: 0,
-    completionTokens: 0,
-    totalTokens: 0,
-  },
-  createdAt: getNowTimestamp(),
-  updatedAt: getNowTimestamp(),
-})
-
-const createChatMessageData = makeDataCreator<ChatMessage>({
-  id: 'chat-message',
-  content: '',
-  role: 'user',
-  loadingStatus: 'ok',
-  actionsHidden: true,
-})
+export type { Chat, ChatMessage, ChatMeta }
 
 // Helper functions
 
@@ -93,28 +36,27 @@ export function isMessageLoading(message: ChatMessage) {
   )
 }
 
-interface ChatStoreState {
-  chats: Chat[]
-  characters: Character[]
-  // use for naming new chats
-  chatNextIndex: number
-}
+export type ChatStore = {
+  // TODO: fix memory leak when use views and mappers
+  // used for list
+  chatsView: {
+    [key: string]: ListPage<ChatMeta>
+  }
 
-interface ChatStoreActions {
+  // used for chat
+  chats: {
+    [key: string]: Chat
+  }
+
+  listChats(p: ListFilters): ListPage<ChatMeta>
+
   getChat(id: string): Chat | undefined
 
-  getRandomCharacter(): Character
+  createChat(p: { name?: string }): Promise<ChatMeta>
 
-  listChats(p: {
-    sortBy?: 'createdAt' | 'updatedAt'
-    order?: 'asc' | 'desc'
-  }): Chat[]
+  updateChat(id: string, p: { name?: string }): Promise<void>
 
-  createChat(p: { name?: string; character: Character }): Chat
-
-  updateChat(id: string, p: { name?: string }): void
-
-  deleteChat(id: string): void
+  deleteChat(id: string): Promise<void>
 
   sendNewMessageStream(p: {
     chatId: string
@@ -125,16 +67,7 @@ interface ChatStoreActions {
     messageId: string
     chatId: string
   }): Promise<Result<boolean>>
-
-  // private functions
-  _handleSendMessageStream(p: {
-    chatId: string
-    messageId: string
-    sendMessages: api_t.ChatCompletionMessage[]
-  }): Promise<Result<boolean>>
 }
-
-export type ChatStore = ChatStoreState & ChatStoreActions
 
 function createChatStore() {
   const idGenerator = new ShortUniqueId()
@@ -164,206 +97,33 @@ function createChatStore() {
     return p.historyMessages
   }
 
-  return immer<ChatStore>((set, get) => ({
-    // use for naming new chats
-    chats: [],
-    characters: [],
-    chatNextIndex: 1,
+  return immer<ChatStore>((set, get) => {
+    const handleRefreshViews = () => {
+      const view = get().chatsView
 
-    getChat(id: string): Chat | undefined {
-      const chat = get().chats.find((c) => c && c.id === id)
-      return chat
-    },
-
-    listChats(p) {
-      const { sortBy = 'createdAt', order = 'desc' } = p
-
-      const chats = [...get().chats].sort((a, b) => {
-        const lhs = a[sortBy]
-        const rhs = b[sortBy]
-
-        if (lhs < rhs) {
-          return order === 'asc' ? -1 : 1
-        }
-        if (lhs > rhs) {
-          return order === 'asc' ? 1 : -1
-        }
-        return 0
-      })
-
-      return chats.filter((c) => !c.deletedAt)
-    },
-
-    updateChat(
-      id: string,
-      p: {
-        name?: string
+      for (const key in view) {
+        const filters = ListFiltersFromString(key)
+        miaService.listChats(filters).then((page) => {
+          set((s) => {
+            s.chatsView[key] = page
+          })
+        })
       }
-    ) {
-      set((s) => {
-        const chat = s.chats.find((c) => c && c.id === id)
-        if (chat) {
-          if (p.name) {
-            chat.name = p.name
-          }
-        }
+    }
+
+    const handleRefreshChat = (id: string) => {
+      miaService.getChatById(id).then((chat) => {
+        set((s) => {
+          s.chats[id] = chat
+        })
       })
-    },
+    }
 
-    getRandomCharacter(): Character {
-      const characters = get().characters
-      const index = Math.floor(Math.random() * characters.length)
-      return characters[index]
-    },
-
-    createChat(p: { name?: string; character: Character }) {
-      const name = p.name || `Chat ${get().chatNextIndex}`
-      const chat = createChatData({
-        id: idGenerator.randomUUID(10),
-        name,
-        character: p.character,
-      })
-
-      set((state) => {
-        state.chats.push(chat)
-        state.chatNextIndex += 1
-      })
-      return chat
-    },
-
-    deleteChat(id: string) {
-      set((state) => {
-        const chat = state.chats.find((c) => c && c.id === id)
-        if (chat) {
-          chat.deletedAt = getNowTimestamp()
-        }
-      })
-    },
-
-    async sendNewMessageStream(p: {
+    const handleSendMessageStream = async (p: {
       chatId: string
-      content: string
-    }): Promise<Result<boolean>> {
-      const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
-
-      if (chatIdx === -1) {
-        throw new Error(`chat not found, id: ${p.chatId}`)
-      }
-
-      const userMessage: api_t.ChatCompletionMessage = {
-        role: 'user',
-        content: p.content,
-      }
-
-      const chat = get().chats[chatIdx]
-      const messages = postprocessMessages({
-        historyMessages: filterValidHistories(chat.messages).map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        newMessage: userMessage,
-        mustHaveMessages: chat.mustHaveMessages,
-      })
-
-      const replyMessageId = idGenerator.randomUUID(8)
-
-      const newlyAddedMessage = [
-        createChatMessageData({
-          id: idGenerator.randomUUID(8),
-          createdAt: getNowTimestamp(),
-          ...userMessage,
-        }),
-        createChatMessageData({
-          id: replyMessageId,
-          createdAt: getNowTimestamp(),
-          role: 'assistant',
-          content: '',
-        }),
-      ]
-
-      set((s) => {
-        const chat = s.chats[chatIdx]
-
-        // push user & reply message to history
-        chat.messages.push(...newlyAddedMessage)
-      })
-
-      const resp = await get()._handleSendMessageStream({
-        chatId: p.chatId,
-        messageId: replyMessageId,
-        sendMessages: messages,
-      })
-
-      return resp
-    },
-
-    async regenerateMessageStream(p) {
-      const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
-      if (chatIdx === -1) {
-        return {
-          ok: false,
-          error: new Error(`chat not found, id: ${p.chatId}`),
-        }
-      }
-
-      const chat = get().chats[chatIdx]
-
-      const messageIndex = chat.messages.findIndex((m) => m.id === p.messageId)
-      if (messageIndex === -1) {
-        return {
-          ok: false,
-          error: new Error(`message not found, id: ${p.messageId}`),
-        }
-      }
-
-      const message = chat.messages[messageIndex]
-      if (message.role !== 'assistant') {
-        return {
-          ok: false,
-          error: new Error(
-            `message is not assistant message, got=${message.role}`
-          ),
-        }
-      }
-
-      if (message.deletedAt || message.hiddenAt) {
-        return {
-          ok: false,
-          error: new Error(`message is either hidden or deleted`),
-        }
-      }
-
-      set((s) => {
-        const chat = s.chats[chatIdx]
-
-        // push reply message to history
-        const message = chat.messages[messageIndex]
-        message.content = ''
-        message.loadingStatus = 'wait_first'
-        message.createdAt = getNowTimestamp()
-      })
-
-      const historyMessages = filterValidHistories(
-        chat.messages.slice(0, messageIndex)
-      )
-      console.log(`message_indx=`, messageIndex, historyMessages)
-      const messages = postprocessMessages({
-        historyMessages: historyMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        mustHaveMessages: chat.mustHaveMessages,
-      })
-
-      const resp = await get()._handleSendMessageStream({
-        chatId: p.chatId,
-        messageId: p.messageId,
-        sendMessages: messages,
-      })
-      return resp
-    },
-
-    async _handleSendMessageStream(p) {
+      messageId: string
+      sendMessages: api_t.ChatCompletionMessage[]
+    }): Promise<Result<boolean>> => {
       const openaiClient = getOpenaiClient()
 
       const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
@@ -419,8 +179,191 @@ function createChatStore() {
       })
 
       return { ok: true, value: true }
-    },
-  }))
+    }
+
+    return {
+      // use for naming new chats
+      chats: {},
+      chatsView: {},
+      chatNextIndex: 1,
+
+      getChat(id: string): Chat | undefined {
+        const chat = get().chats[id]
+        if (!chat) {
+          handleRefreshChat(id)
+        }
+        return chat
+      },
+
+      listChats(filters) {
+        const key = ListFiltersToString(filters)
+        const view = get().chatsView[key]
+        if (view) {
+          return view
+        }
+        set((s) => {
+          s.chatsView[key] = createDefaultListPage(filters)
+        })
+
+        miaService.listChats(filters).then((page) => {
+          set((s) => {
+            s.chatsView[key] = page
+          })
+        })
+
+        return get().chatsView[key]
+      },
+
+      async updateChat(
+        id: string,
+        p: {
+          name?: string
+        }
+      ) {
+        await miaService.updateChat(id, p)
+        handleRefreshViews()
+        handleRefreshChat(id)
+      },
+
+      async createChat(p: { name?: string }) {
+        const chat = await miaService.createChat(p)
+        handleRefreshViews()
+        handleRefreshChat(chat.id)
+        return chat
+      },
+
+      async deleteChat(id: string) {
+        await miaService.deleteChat(id)
+        handleRefreshViews()
+        handleRefreshChat(id)
+      },
+
+      async sendNewMessageStream(p: {
+        chatId: string
+        content: string
+      }): Promise<Result<boolean>> {
+        const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
+
+        if (chatIdx === -1) {
+          throw new Error(`chat not found, id: ${p.chatId}`)
+        }
+
+        const userMessage: api_t.ChatCompletionMessage = {
+          role: 'user',
+          content: p.content,
+        }
+
+        const chat = get().chats[chatIdx]
+        const messages = postprocessMessages({
+          historyMessages: filterValidHistories(chat.messages).map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          newMessage: userMessage,
+          mustHaveMessages: [],
+        })
+
+        const replyMessageId = idGenerator.randomUUID(8)
+
+        const newlyAddedMessage = [
+          createChatMessageData({
+            id: idGenerator.randomUUID(8),
+            createdAt: getNowTimestamp(),
+            ...userMessage,
+          }),
+          createChatMessageData({
+            id: replyMessageId,
+            createdAt: getNowTimestamp(),
+            role: 'assistant',
+            content: '',
+          }),
+        ]
+
+        set((s) => {
+          const chat = s.chats[chatIdx]
+
+          // push user & reply message to history
+          chat.messages.push(...newlyAddedMessage)
+        })
+
+        const resp = await handleSendMessageStream({
+          chatId: p.chatId,
+          messageId: replyMessageId,
+          sendMessages: messages,
+        })
+
+        return resp
+      },
+
+      async regenerateMessageStream(p) {
+        const chatIdx = get().chats.findIndex((c) => c.id === p.chatId)
+        if (chatIdx === -1) {
+          return {
+            ok: false,
+            error: new Error(`chat not found, id: ${p.chatId}`),
+          }
+        }
+
+        const chat = get().chats[chatIdx]
+
+        const messageIndex = chat.messages.findIndex(
+          (m) => m.id === p.messageId
+        )
+        if (messageIndex === -1) {
+          return {
+            ok: false,
+            error: new Error(`message not found, id: ${p.messageId}`),
+          }
+        }
+
+        const message = chat.messages[messageIndex]
+        if (message.role !== 'assistant') {
+          return {
+            ok: false,
+            error: new Error(
+              `message is not assistant message, got=${message.role}`
+            ),
+          }
+        }
+
+        if (message.deletedAt || message.hiddenAt) {
+          return {
+            ok: false,
+            error: new Error(`message is either hidden or deleted`),
+          }
+        }
+
+        set((s) => {
+          const chat = s.chats[chatIdx]
+
+          // push reply message to history
+          const message = chat.messages[messageIndex]
+          message.content = ''
+          message.loadingStatus = 'wait_first'
+          message.createdAt = getNowTimestamp()
+        })
+
+        const historyMessages = filterValidHistories(
+          chat.messages.slice(0, messageIndex)
+        )
+        console.log(`message_indx=`, messageIndex, historyMessages)
+        const messages = postprocessMessages({
+          historyMessages: historyMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          mustHaveMessages: chat.mustHaveMessages,
+        })
+
+        const resp = await handleSendMessageStream({
+          chatId: p.chatId,
+          messageId: p.messageId,
+          sendMessages: messages,
+        })
+        return resp
+      },
+    }
+  })
 }
 
 export const useChatStore = create(

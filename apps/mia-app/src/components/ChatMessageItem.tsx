@@ -2,6 +2,7 @@ import {
   Avatar,
   Button,
   Divider,
+  IconButton,
   ListItem,
   ListItemAvatar,
   Paper,
@@ -37,24 +38,22 @@ function ChatMessageActions({
   const renderGenerateButton = () => {
     if (isLoading) {
       return (
-        <Button size="small" color="error">
-          <CancelIcon />
-          Cancel
-        </Button>
+        <IconButton size="small" color="error">
+          <CancelIcon fontSize="inherit" />
+        </IconButton>
       )
     }
 
     return (
-      <Button size="small" color="warning" onClick={onRegenerate}>
-        <RefreshIcon />
-        Regenerate
-      </Button>
+      <IconButton size="small" onClick={onRegenerate} color="warning">
+        <RefreshIcon fontSize="inherit" />
+      </IconButton>
     )
   }
 
   return (
-    <Stack direction="row-reverse" gap={2} marginTop={1} fontSize="14px">
-      <Button
+    <Stack direction="row-reverse" gap="0px" marginTop="4px">
+      <IconButton
         size="small"
         color="secondary"
         onClick={async () => {
@@ -63,9 +62,12 @@ function ChatMessageActions({
           setTimeout(() => setCopied(false), 2000)
         }}
       >
-        {copied ? <DoneIcon /> : <CopyAllRoundedIcon />}
-        Copy Raw
-      </Button>
+        {copied ? (
+          <DoneIcon fontSize="inherit" />
+        ) : (
+          <CopyAllRoundedIcon fontSize="inherit" />
+        )}
+      </IconButton>
 
       {renderGenerateButton()}
     </Stack>
@@ -77,7 +79,6 @@ export default function ChatMessageItem({
   onRegenerate,
 }: {
   message: chat_t.ChatMessage
-  character: chat_t.Character
 } & ChatMessageActionsProps) {
   const waitingReceive = message.loadingStatus === 'wait_first'
   const isUser = message.role == 'user'
@@ -86,7 +87,7 @@ export default function ChatMessageItem({
     <ListItem
       sx={{
         flexDirection: isUser ? 'row-reverse' : 'row',
-        mb: '8px',
+        mb: '4px',
         gap: '16px',
       }}
     >
@@ -101,7 +102,7 @@ export default function ChatMessageItem({
       </ListItemAvatar>
       <Paper
         sx={{
-          padding: '8px 16px',
+          padding: '8px 16px 4px',
           color: isUser ? 'primary.contrastText' : 'black',
           borderRadius: '12px',
           backgroundColor: isUser ? '#1777ff' : '#f9f9fe',

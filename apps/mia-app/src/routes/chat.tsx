@@ -3,8 +3,7 @@ import { Box } from '@mui/material'
 import { ChatPanel } from '../components/ChatPanel'
 import { useChatStore } from '../stores/chat'
 import BaseAppBar from '../components/BaseAppBar'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { useSnackbar } from 'notistack'
+import { Navigate, useParams } from 'react-router-dom'
 
 export function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>()
