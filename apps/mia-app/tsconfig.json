@@ -18,11 +18,14 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "jsx": "react-jsx"
   },
   "include": [
     "src",
-    "mock"
+    "mock",
+    "src/backend"
   ],
   "references": [
     {
