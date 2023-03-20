@@ -22,6 +22,7 @@ importers:
       '@emotion/styled': ^11.10.6
       '@faker-js/faker': ^7.6.0
       '@fontsource/roboto': ^4.5.8
+      '@material/material-color-utilities': ^0.2.4
       '@mui/icons-material': ^5.11.11
       '@mui/material': ^5.11.11
       '@nozbe/watermelondb': ^0.25.5
@@ -67,6 +68,7 @@ importers:
       '@emotion/react': 11.10.6_pmekkgnqduwlme35zpnqhenc34
       '@emotion/styled': 11.10.6_oouaibmszuch5k64ms7uxp2aia
       '@fontsource/roboto': 4.5.8
+      '@material/material-color-utilities': 0.2.4
       '@mui/icons-material': 5.11.11_h5fh5ntwxtyr677wxvzgewjsma
       '@mui/material': 5.11.11_xqeqsl5kvjjtyxwyi3jhw3yuli
       '@nozbe/watermelondb': 0.25.5_kc7r2wysnpjrqsyp6dugm2ixlu
@@ -1177,6 +1179,10 @@ packages:
       '@jridgewell/resolve-uri': 3.1.0
       '@jridgewell/sourcemap-codec': 1.4.14
     dev: true
+
+  /@material/material-color-utilities/0.2.4:
+    resolution: {integrity: sha512-UsJO907S9/5Tf19KwGjEFggswGyCO/WYKBzfDNr8TN9V+7snfC2zV8pN0WXdqt+IS7EvDDZp0rpMXptSPSiKVw==}
+    dev: false
 
   /@miniflare/cache/2.12.1:
     resolution: {integrity: sha512-6Pj5avy53qULTa13gWxGTDBuwX0yAzr4Zkzb0ZBh40bcbHp4vRkOk7PvHBoxV0M76JxQDHotGaW+ik510z5Xrg==}

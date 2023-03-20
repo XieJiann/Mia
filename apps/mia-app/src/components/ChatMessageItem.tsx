@@ -1,5 +1,6 @@
 import {
   Avatar,
+  Box,
   Button,
   Divider,
   IconButton,
@@ -7,6 +8,7 @@ import {
   ListItemAvatar,
   Paper,
   Stack,
+  Typography,
 } from '@mui/material'
 import * as chat_t from '../stores/chat'
 
@@ -47,14 +49,14 @@ function ChatMessageActions({
     }
 
     return (
-      <IconButton size="small" onClick={onRegenerate} color="warning">
+      <IconButton size="small" onClick={onRegenerate} color="primary">
         <RefreshIcon fontSize="inherit" />
       </IconButton>
     )
   }
 
   return (
-    <Stack direction="row-reverse" gap="0px" marginTop="4px">
+    <Stack direction="row-reverse" gap="0px">
       <IconButton
         size="small"
         color="secondary"
@@ -90,45 +92,66 @@ export default function ChatMessageItem({
     <ListItem
       sx={{
         flexDirection: isUser ? 'row-reverse' : 'row',
+        alignItems: 'flex-start',
         mb: '4px',
-        gap: '16px',
+        gap: '8px',
       }}
     >
       <ListItemAvatar sx={{ minWidth: 0 }}>
         <Avatar
           sx={{
+            height: '32px',
+            width: '32px',
+            fontSize: '16px',
             bgcolor: isUser ? 'primary.main' : 'secondary.main',
           }}
         >
           {isUser ? 'U' : 'C'}{' '}
         </Avatar>
       </ListItemAvatar>
-      <Paper
+      <Box
         sx={{
-          padding: '8px 16px 4px',
-          color: isUser ? 'primary.contrastText' : 'black',
-          borderRadius: '12px',
-          backgroundColor: isUser ? '#1777ff' : '#f9f9fe',
-          maxWidth: '580px',
-          minWidth: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          alignItems: isUser ? 'flex-end' : 'flex-start',
         }}
       >
-        {waitingReceive ? (
-          'Loading ...'
-        ) : (
-          <ChatMessageContentView content={message.content} />
-        )}
-        {!isUser && (
-          <>
-            <Divider sx={{ mt: '8px' }} />{' '}
-            <ChatMessageActions
-              onRegenerate={onRegenerate}
-              onStopGenerate={onStopGenerate}
-              message={message}
-            />{' '}
-          </>
-        )}
-      </Paper>
+        <Box component="span" lineHeight="1" fontSize="13px" color="#AAAAAA">
+          {isUser ? 'User' : 'ChatGPT'}
+        </Box>
+        <Box display="flex" flexDirection="column" gap="2px">
+          <Paper
+            sx={{
+              padding: '8px 16px',
+              paddingBottom: '8px',
+              color: isUser ? 'primary.contrastText' : 'black',
+              borderRadius: '12px',
+              backgroundColor: isUser ? '#1777ff' : '#ffffff',
+              maxWidth: '500px',
+              minWidth: '10px',
+            }}
+            elevation={1}
+          >
+            {waitingReceive ? (
+              'Loading ...'
+            ) : (
+              <ChatMessageContentView content={message.content} />
+            )}
+          </Paper>
+          {!isUser && (
+            <>
+              <ChatMessageActions
+                onRegenerate={onRegenerate}
+                onStopGenerate={onStopGenerate}
+                message={message}
+              />{' '}
+            </>
+          )}
+        </Box>
+      </Box>
+
+      <Box width="40px" />
     </ListItem>
   )
 }

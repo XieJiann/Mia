@@ -12,6 +12,7 @@
     "@emotion/react": "^11.10.6",
     "@emotion/styled": "^11.10.6",
     "@fontsource/roboto": "^4.5.8",
+    "@material/material-color-utilities": "^0.2.4",
     "@mui/icons-material": "^5.11.11",
     "@mui/material": "^5.11.11",
     "@nozbe/watermelondb": "^0.25.5",

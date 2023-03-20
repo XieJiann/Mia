@@ -7,6 +7,7 @@ import ChatListPage from './routes/chats'
 import ErrorPage from './routes/error'
 import RootPage from './routes/root'
 import { SettingsPage } from './routes/settings'
+import M3ThemeProvider from './themes/m3/M3ThemeProvider'
 
 const router = createHashRouter([
   {
@@ -41,9 +42,11 @@ const router = createHashRouter([
 function App() {
   return (
     <CssBaseline>
-      <SnackbarProvider maxSnack={3}>
-        <RouterProvider router={router} />
-      </SnackbarProvider>
+      <M3ThemeProvider>
+        <SnackbarProvider maxSnack={3}>
+          <RouterProvider router={router} />
+        </SnackbarProvider>
+      </M3ThemeProvider>
     </CssBaseline>
   )
 }
