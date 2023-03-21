@@ -1,8 +1,5 @@
-import ShortUniqueId from 'short-unique-id'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import { api_t, OpenAIClient } from '../api'
 import {
   ChatMessage,
   Chat,
@@ -13,21 +10,14 @@ import {
   ListFiltersToString,
   createDefaultListPage,
   ListFiltersFromString,
+  GetLoading,
 } from '../backend/service'
 import { Result } from '../types'
-import { getNowTimestamp } from '../types/model'
-import { useSettingsStore } from './settings'
 
 export type ChatRole = 'user' | 'assistant' | 'system'
 export type { Chat, ChatMessage, ChatMeta }
 
 // Helper functions
-
-const filterValidHistories = (messages: ChatMessage[]) => {
-  return messages.filter((m) => {
-    return m.loadingStatus === 'ok' && !m.hiddenAt && !m.deletedAt
-  })
-}
 
 export function isMessageLoading(message: ChatMessage) {
   return (
@@ -45,12 +35,12 @@ export type ChatStore = {
 
   // used for chat
   chats: {
-    [key: string]: Chat
+    [key: string]: Result<Chat>
   }
 
   listChats(p: ListFilters): ListPage<ChatMeta>
 
-  getChat(id: string): Chat | undefined
+  getChat(id: string): GetLoading<Chat>
 
   createChat(p: { name?: string }): Promise<ChatMeta>
 
@@ -101,10 +91,12 @@ function createChatStore() {
       }
 
       set((s) => {
-        const chat = s.chats[message.chat.id]
-        if (!chat) {
+        const chatRes = s.chats[message.chat.id]
+        if (!chatRes.ok) {
           return
         }
+
+        const chat = chatRes.value
 
         const index = chat.messages.findIndex((m) => m.id === messageId)
         if (index < 0) {
@@ -116,17 +108,16 @@ function createChatStore() {
     }
 
     return {
-      // use for naming new chats
       chats: {},
       chatsView: {},
-      chatNextIndex: 1,
 
-      getChat(id: string): Chat | undefined {
-        const chat = get().chats[id]
-        if (!chat) {
+      getChat(id: string): GetLoading<Chat> {
+        const chatRes = get().chats[id]
+        if (!chatRes) {
           handleRefreshChat(id)
+          return { loading: true, value: undefined }
         }
-        return chat
+        return { loading: false, value: chatRes.value, error: chatRes.error }
       },
 
       listChats(filters) {

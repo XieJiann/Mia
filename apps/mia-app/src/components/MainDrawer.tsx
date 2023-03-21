@@ -87,6 +87,9 @@ function MainDrawer({ width }: { width: number }) {
       flexDirection="column"
       alignItems="stretch"
       height="100vh"
+      onClick={(e) => {
+        e.stopPropagation()
+      }}
     >
       {/* DrawerHeader */}
       <Box
@@ -100,7 +103,7 @@ function MainDrawer({ width }: { width: number }) {
         </IconButton>
       </Box>
       <Divider />
-      <Box flex="1" maxHeight="60vh">
+      <Box flex="1" maxHeight="50vh">
         <DrawerChatList />
       </Box>
       <Divider />
@@ -134,6 +137,7 @@ function MainDrawer({ width }: { width: number }) {
             width: width,
           },
         }}
+        onClose={closeMainDrawer}
       >
         {drawer}
       </Drawer>

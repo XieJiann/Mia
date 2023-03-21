@@ -18,9 +18,29 @@ const ChatMessageContentView = React.memo(
           remarkPlugins={[remarkMath, remarkGfm]}
           rehypePlugins={[[rehypeKatex, { output: 'mathml' }]]}
           components={{
+            img({ node, ...props }) {
+              return (
+                <img
+                  {...props}
+                  style={{
+                    objectFit: 'cover',
+                    maxWidth: '100%',
+                    maxHeight: '200px',
+                  }}
+                />
+              )
+            },
             // code({ node, inline, className, children, ...props }) )
             code({ node, inline, className, children, ...props }) {
-              if (inline) return <code>{children}</code>
+              if (inline)
+                return (
+                  <Box
+                    component="code"
+                    sx={{ overflowX: 'scroll', display: 'block' }}
+                  >
+                    {children}
+                  </Box>
+                )
               let highlight
 
               const match = /language-(\w+)/.exec(className || '')

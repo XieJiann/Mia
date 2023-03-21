@@ -43,9 +43,9 @@ function App() {
   return (
     <CssBaseline>
       <M3ThemeProvider>
-        <SnackbarProvider maxSnack={3}>
-          <RouterProvider router={router} />
-        </SnackbarProvider>
+      <SnackbarProvider maxSnack={3}>
+      <RouterProvider router={router} />
+      </SnackbarProvider>
       </M3ThemeProvider>
     </CssBaseline>
   )

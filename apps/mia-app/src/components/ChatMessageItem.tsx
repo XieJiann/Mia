@@ -8,6 +8,7 @@ import {
   ListItemAvatar,
   Paper,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import * as chat_t from '../stores/chat'
@@ -15,8 +16,10 @@ import * as chat_t from '../stores/chat'
 import { useState } from 'react'
 import {
   Cancel as CancelIcon,
+  CancelOutlined,
   CopyAllRounded as CopyAllRoundedIcon,
   Done as DoneIcon,
+  EditOutlined,
   Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import ChatMessageContentView from './ChatMessageContentView'
@@ -39,42 +42,60 @@ function ChatMessageActions({
     message.loadingStatus === 'loading' ||
     message.loadingStatus === 'wait_first'
 
-  const renderGenerateButton = () => {
+  const renderButtons = () => {
+    return (
+      <Stack direction="row">
+        <Tooltip title="Edit Reply">
+          <IconButton size="small" color="secondary">
+            <EditOutlined fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Copy Reply">
+          <IconButton
+            size="small"
+            color="secondary"
+            onClick={async () => {
+              await navigator.clipboard.writeText(message.content)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+          >
+            {copied ? (
+              <DoneIcon fontSize="inherit" />
+            ) : (
+              <CopyAllRoundedIcon fontSize="inherit" />
+            )}
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    )
+  }
+
+  const renderLoadingButton = () => {
     if (isLoading) {
       return (
-        <IconButton size="small" color="error" onClick={onStopGenerate}>
-          <CancelIcon fontSize="inherit" />
-        </IconButton>
+        <Tooltip title="Stop Generate">
+          <IconButton size="small" color="warning" onClick={onStopGenerate}>
+            <CancelOutlined fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
       )
     }
 
     return (
-      <IconButton size="small" onClick={onRegenerate} color="primary">
-        <RefreshIcon fontSize="inherit" />
-      </IconButton>
+      <Tooltip title="Regenerate">
+        <IconButton size="small" onClick={onRegenerate} color="primary">
+          <RefreshIcon fontSize="inherit" />
+        </IconButton>
+      </Tooltip>
     )
   }
 
   return (
-    <Stack direction="row-reverse" gap="0px">
-      <IconButton
-        size="small"
-        color="secondary"
-        onClick={async () => {
-          await navigator.clipboard.writeText(message.content)
-          setCopied(true)
-          setTimeout(() => setCopied(false), 2000)
-        }}
-      >
-        {copied ? (
-          <DoneIcon fontSize="inherit" />
-        ) : (
-          <CopyAllRoundedIcon fontSize="inherit" />
-        )}
-      </IconButton>
-
-      {renderGenerateButton()}
-    </Stack>
+    <Box display="flex" justifyContent="space-between">
+      {renderLoadingButton()}
+      {!isLoading && renderButtons()}
+    </Box>
   )
 }
 

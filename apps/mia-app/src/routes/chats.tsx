@@ -20,10 +20,8 @@ import {
 import { useNavigate } from 'react-router-dom'
 import BaseAppBar from '../components/BaseAppBar'
 import { Chat, ChatMeta, useChatStore } from '../stores/chat'
-import { FixedSizeList, ListChildComponentProps } from 'react-window'
-import { shallow } from 'zustand/shallow'
-import { useState } from 'react'
 import { useDoubleConfirm } from '../hooks/confirm'
+import React from 'react'
 
 type ChatItemAction = 'delete' | 'edit'
 function ChatListItem({
@@ -88,7 +86,7 @@ function ChatListItem({
   }
 
   return (
-    <ListItem secondaryAction={renderActions()}>
+    <ListItem key={chat.id} secondaryAction={renderActions()}>
       <ListItemButton onClick={() => onSelectChat(chat.id)}>
         <ListItemIcon>
           <ChatIcon />
@@ -131,7 +129,7 @@ export default function ChatListPage() {
             overflowY: 'scroll',
           }}
         >
-          <ListItem>
+          <ListItem key="action-add-chat">
             <ListItemButton onClick={handleCreateChat}>
               <ListItemIcon>
                 <AddIcon />
@@ -140,15 +138,14 @@ export default function ChatListPage() {
             </ListItemButton>
           </ListItem>
           {sortedChats.data.map((chat) => (
-            <>
-              <Divider key={`div-${chat.id}`} component="li" />
+            <React.Fragment key={chat.id}>
+              <Divider component="li" />
               <ChatListItem
-                key={chat.id}
                 chat={chat}
                 onSelectChat={handleSelectChat}
                 onDeleteChat={deleteChat}
               />
-            </>
+            </React.Fragment>
           ))}
         </List>
       </Box>

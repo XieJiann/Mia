@@ -12,6 +12,9 @@ import {
   ListItemIcon,
   Box,
   IconButton,
+  Tooltip,
+  Stack,
+  Button,
 } from '@mui/material'
 import { useMemoizedFn } from 'ahooks'
 import { useNavigate } from 'react-router-dom'
@@ -49,25 +52,21 @@ export function DrawerChatList() {
       alignItems="stretch"
       height="100%"
     >
-      <Box paddingY={2} paddingX={4}>
-        <Typography variant="h5" component="div" sx={{ flexGrow: 1 }}>
+      <Stack paddingY={2} paddingX={4} direction="row" alignItems="center">
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
           Chats
         </Typography>
-      </Box>
+        <Button onClick={handleCreateChat}>
+          <AddIcon />
+          Add Chat
+        </Button>
+      </Stack>
       <List
         sx={{
           height: '100%',
           overflowY: 'scroll',
         }}
       >
-        <ListItem disablePadding>
-          <ListItemButton onClick={handleCreateChat}>
-            <ListItemIcon>
-              <AddIcon />
-            </ListItemIcon>
-            <ListItemText primary={'Add Chat'} />
-          </ListItemButton>
-        </ListItem>
         {sortedChats.data.map((chat) => (
           <ListItem
             key={chat.id}

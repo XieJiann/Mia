@@ -22,7 +22,7 @@ function Main({
     position: 'relative',
     width: '100%',
     flexGrow: 1,
-    paddingX: theme.spacing(3),
+    paddingX: theme.spacing(0),
     transition: theme.transitions.create('margin', {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
@@ -56,10 +56,7 @@ export default function RootPage() {
     >
       <MainDrawer width={drawerWidth} />
       <Main mainDrawerWidth={drawerWidth}>
-        {/* mt is AppBar's height */}
-        <Box sx={{ mt: '56px' }}>
-          <Outlet />
-        </Box>
+        <Outlet />
       </Main>
       <MoreDrawer />
     </Box>

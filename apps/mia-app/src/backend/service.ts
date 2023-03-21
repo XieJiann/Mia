@@ -3,8 +3,22 @@ export * as models from './models'
 
 import { database } from './db'
 import { api_t, OpenAIClient } from '../api'
-import { Q } from '@nozbe/watermelondb'
+import { Collection, Model, Q } from '@nozbe/watermelondb'
 import { Result } from '../types'
+
+class NotFoundError extends Error {}
+
+async function getByIdFromTable<T extends Model>(
+  table: Collection<T>,
+  id: string
+): Promise<Result<T>> {
+  try {
+    const res = await table.find(id)
+    return { ok: true, value: res }
+  } catch (e) {
+    return { ok: false, error: new NotFoundError(`id=${id} not found`) }
+  }
+}
 
 const defaultSettings: models.Settings = {
   apiClient: {
@@ -15,6 +29,12 @@ const defaultSettings: models.Settings = {
     },
   },
   openaiProfiles: [],
+}
+
+export type GetLoading<T> = {
+  loading: boolean
+  error?: Error | undefined
+  value?: T | undefined
 }
 
 export type ListFilters = {
@@ -160,24 +180,37 @@ export class MiaService {
     }
   }
 
-  async getChatById(id: string): Promise<Chat> {
-    const chat = await this.chatTable.find(id)
+  async getChatById(id: string): Promise<Result<Chat>> {
+    const chatRes = await getByIdFromTable(this.chatTable, id)
+    if (!chatRes.ok) {
+      return chatRes
+    }
+
+    const chat = chatRes.value
     const messages = await chat.messages
       .extend(Q.sortBy('created_at', 'asc'))
       .fetch()
 
     return {
-      ...chat.getRawObject(),
-      messages: messages.map((m) => m.getRawObject()),
+      ok: true,
+      value: {
+        ...chat.getRawObject(),
+        messages: messages.map((m) => m.getRawObject()),
+      },
     }
   }
 
   async createChat(p: { name?: string }): Promise<ChatMeta> {
-    let { name = 'New Chat' } = p
+    let { name } = p
 
     if (!name) {
       const chats = await this.chatTable
-        .query(Q.sortBy('name', 'desc'), Q.where('name', Q.like('New Chat %')))
+        .query(
+          Q.where('name', Q.like('New Chat %')),
+          Q.where('deleted_at', null),
+          Q.sortBy('created_at', 'desc'),
+          Q.take(1)
+        )
         .fetch()
 
       const lastName = chats[0]?.name || 'New Chat 0'
@@ -191,7 +224,7 @@ export class MiaService {
 
     const chat = await database.write(async () => {
       return this.chatTable.create((c) => {
-        c.name = name
+        c.name = name || 'New Chat'
       })
     })
 
@@ -388,6 +421,10 @@ export class MiaService {
       handleStream
     )
 
+    // sleep 50ms to make write finish
+    // because watermelondb will queue the writer
+    await sleep(50)
+
     if (!resp.ok) {
       await database.write(() =>
         p.replyMessage.update((m) => {
@@ -399,10 +436,11 @@ export class MiaService {
       return { ok: false, error: resp.error }
     }
 
-    await database.write(() =>
-      p.replyMessage.update((m) => {
-        m.loadingStatus = 'ok'
-      })
+    await database.write(
+      async () =>
+        await p.replyMessage.update((m) => {
+          m.loadingStatus = 'ok'
+        })
     )
 
     p.onMessageUpdated(p.replyMessage.id)
