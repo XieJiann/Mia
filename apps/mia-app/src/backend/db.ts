@@ -7,7 +7,11 @@ import {
   PromptModel,
   schema,
   CharacterModel,
+  BotModel,
+  BotTemplateModel,
+  UserModel,
 } from './models'
+import { initDatas } from './data'
 
 const migrations = schemaMigrations({
   migrations: [],
@@ -21,9 +25,26 @@ const adapter = new LokiJSAdapter({
   dbName: 'mia',
 })
 
-const database = new Database({
-  adapter,
-  modelClasses: [ChatModel, ChatMessageModel, PromptModel, CharacterModel],
-})
+function initDatabase() {
+  const database = new Database({
+    adapter,
+    modelClasses: [
+      UserModel,
+      ChatModel,
+      ChatMessageModel,
+      PromptModel,
+      CharacterModel,
+      BotModel,
+      BotTemplateModel,
+    ],
+  })
+
+  // init data
+  initDatas(database)
+
+  return database
+}
+
+const database = initDatabase()
 
 export { database }

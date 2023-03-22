@@ -5,11 +5,12 @@ import {
   field,
   text,
   immutableRelation,
-  lazy,
   json,
+  relation,
 } from '@nozbe/watermelondb/decorators'
 import { Model, tableSchema, appSchema, Relation } from '@nozbe/watermelondb'
 import { Q, Query } from '@nozbe/watermelondb'
+import { Associations } from '@nozbe/watermelondb/Model'
 
 export const schema = appSchema({
   version: 1,
@@ -31,6 +32,14 @@ export const schema = appSchema({
         { name: 'chat_id', type: 'string', isIndexed: true },
         { name: 'content', type: 'string' },
         { name: 'role', type: 'string' },
+        {
+          name: 'sender_id',
+          type: 'string',
+        },
+        {
+          name: 'sender_type',
+          type: 'string',
+        },
         { name: 'actions_hidden', type: 'boolean' },
         { name: 'loading_status', type: 'string' },
         { name: 'created_at', type: 'number' },
@@ -65,6 +74,51 @@ export const schema = appSchema({
         { name: 'deleted_at', type: 'number', isOptional: true },
       ],
     }),
+    tableSchema({
+      name: 'users',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'display_name', type: 'string' },
+        {
+          name: 'avatar_url',
+          type: 'string',
+        },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'deleted_at', type: 'number', isOptional: true },
+      ],
+    }),
+    tableSchema({
+      name: 'bots',
+      columns: [
+        // unique key
+        { name: 'name', type: 'string', isIndexed: true },
+        { name: 'display_name', type: 'string' },
+        {
+          name: 'avatar_url',
+          type: 'string',
+        },
+        { name: 'kind', type: 'string' },
+        { name: 'description', type: 'string' },
+        { name: 'bot_template_id', type: 'string', isIndexed: true },
+        // json object
+        { name: 'bot_template_params', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'deleted_at', type: 'number', isOptional: true },
+      ],
+    }),
+    tableSchema({
+      name: 'bot_templates',
+      columns: [
+        // unique key
+        { name: 'name', type: 'string', isIndexed: true },
+        { name: 'description', type: 'string' },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+        { name: 'deleted_at', type: 'number', isOptional: true },
+      ],
+    }),
   ],
 })
 
@@ -80,6 +134,45 @@ function sanitizeChatTokenUsage(data: object = {}): ChatTokenUsage {
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
+  }
+}
+
+export type BotTemplateParams = Record<string, unknown>
+
+function sanitizeBotTemplateParams(data: object = {}): BotTemplateParams {
+  return data as BotTemplateParams
+}
+
+export class UserModel extends Model {
+  static table: string = 'users'
+
+  @text('name') name!: string
+
+  @text('display_name') displayName!: string
+
+  @text('avatar_url') avatarUrl!: string
+
+  @readonly
+  @date('created_at')
+  createdAt!: Date
+
+  @readonly
+  @date('updated_at')
+  updatedAt!: Date
+
+  @date('deleted_at')
+  deletedAt?: Date
+
+  getRawObject(): User {
+    return {
+      id: this.id,
+      name: this.name,
+      displayName: this.displayName,
+      avatarUrl: this.avatarUrl,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      deletedAt: this.deletedAt,
+    }
   }
 }
 
@@ -125,8 +218,8 @@ export class ChatModel extends Model {
 
 export class ChatMessageModel extends Model {
   static table = 'chat_messages'
-  static associations = {
-    chat: { type: 'belongs_to' as 'belongs_to', key: 'chat_id' },
+  static associations: Associations = {
+    chat: { type: 'belongs_to', key: 'chat_id' },
   }
 
   @immutableRelation('chats', 'chat_id') chat!: Relation<ChatModel>
@@ -139,6 +232,9 @@ export class ChatMessageModel extends Model {
     | 'loading'
     | 'ok'
     | 'error'
+
+  @text('sender_id') senderId!: string
+  @text('sender_type') senderType!: 'user' | 'bot'
 
   @readonly
   @date('created_at')
@@ -154,13 +250,15 @@ export class ChatMessageModel extends Model {
   @date('deleted_at')
   deletedAt?: Date
 
-  getRawObject(): ChatMessage {
+  getRawObject(): ChatMessageMeta {
     return {
       id: this.id,
       content: this.content,
       chat: {
         id: this.chat.id as string,
       },
+      senderId: this.senderId as string,
+      senderType: this.senderType,
       role: this.role,
       actionsHidden: this.actionsHidden,
       loadingStatus: this.loadingStatus,
@@ -222,18 +320,103 @@ export class CharacterModel extends Model {
   }
 }
 
+export class BotModel extends Model {
+  static table = 'bots'
+  static associations: Associations = {
+    botTemplate: { type: 'belongs_to', key: 'chat_id' },
+  }
+
+  @text('name') name!: string
+
+  @text('display_name') displayName!: string
+
+  @text('avatar_url') avatarUrl!: string
+
+  @text('kind') kind!: string
+
+  @text('description') description!: string
+
+  @relation('bot_templates', 'bot_template_id')
+  botTemplate!: Relation<BotTemplateModel>
+
+  @json('bot_template_params', sanitizeBotTemplateParams)
+  botTemplateParams!: BotTemplateParams
+
+  @readonly
+  @date('created_at')
+  createdAt!: Date
+
+  @readonly
+  @date('updated_at')
+  updatedAt!: Date
+
+  @date('deleted_at')
+  deletedAt?: Date
+
+  getRawObject(): BotMeta {
+    return {
+      id: this.id,
+      name: this.name,
+      displayName: this.displayName,
+      avatarUrl: this.avatarUrl,
+      kind: this.kind,
+      description: this.description,
+      botTemplateParams: this.botTemplateParams,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      deletedAt: this.deletedAt,
+    }
+  }
+}
+
+export class BotTemplateModel extends Model {
+  static table = 'bot_templates'
+
+  @text('name') name!: string
+
+  @text('description') description!: string
+
+  @readonly
+  @date('created_at')
+  createdAt!: Date
+
+  @readonly
+  @date('updated_at')
+  updatedAt!: Date
+
+  @date('deleted_at')
+  deletedAt?: Date
+}
+
 // Model Raw Types
+
+export type User = ExtractModelType<UserModel>
+
 export type Character = ExtractModelType<CharacterModel>
 
 export type Chat = ChatMeta & {
-  messages: ChatMessage[]
+  messages: ChatMessageMeta[]
 }
 
 export type ChatMeta = Omit<ExtractModelType<ChatModel>, 'messages'>
 
-export type ChatMessage = Omit<ExtractModelType<ChatMessageModel>, 'chat'> & {
+export type ChatMessageMeta = Omit<
+  ExtractModelType<ChatMessageModel>,
+  'chat'
+> & {
   chat: { id: string }
 }
+
+export type ChatMessage = ChatMessageMeta & {
+  sender?: MessageSender
+}
+
+export type BotMeta = Omit<ExtractModelType<BotModel>, 'botTemplate'>
+export type Bot = BotMeta & {
+  botTemplate: BotTemplate
+}
+
+export type BotTemplate = ExtractModelType<BotTemplateModel>
 
 // @see https://stackoverflow.com/questions/53501721/typescript-exclude-property-key-when-starts-with-target-string
 
@@ -248,17 +431,20 @@ type ExtractModelTypeImpl<T extends Model> = Omit<
   Exclude<keyof Model, 'id'> | 'getRawObject'
 >
 
-export interface OpenAiProfile {
-  name: string
-  endpoint: string
-  apiKey?: string
-  desc?: string
+export interface Settings {
+  apiSettings: {
+    openaiApiEndpoint: string
+    openaiApiKey: string
+  }
+  chatDefaultSettings: {
+    defaultBotName: string
+  }
 }
 
-export interface Settings {
-  apiClient: {
-    usedOpenaiProfile: OpenAiProfile
-  }
-
-  openaiProfiles: OpenAiProfile[]
+export interface MessageSender {
+  type: 'user' | 'bot'
+  id: string
+  name: string
+  displayName: string
+  avatarUrl: string
 }

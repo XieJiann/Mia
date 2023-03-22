@@ -1,15 +1,12 @@
 import {
   Avatar,
   Box,
-  Button,
-  Divider,
   IconButton,
   ListItem,
   ListItemAvatar,
   Paper,
   Stack,
   Tooltip,
-  Typography,
 } from '@mui/material'
 import * as chat_t from '../stores/chat'
 
@@ -23,9 +20,10 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import ChatMessageContentView from './ChatMessageContentView'
+import { models } from '../backend/service'
 
 interface ChatMessageActionsProps {
-  message: chat_t.ChatMessage
+  message: models.ChatMessage
   onRegenerate: () => void
   onStopGenerate: () => void
 }
@@ -35,8 +33,6 @@ function ChatMessageActions({
   onStopGenerate,
 }: ChatMessageActionsProps) {
   const [copied, setCopied] = useState<boolean>(false)
-
-  // console.log(message)
 
   const isLoading =
     message.loadingStatus === 'loading' ||
@@ -107,7 +103,24 @@ export default function ChatMessageItem({
   message: chat_t.ChatMessage
 } & ChatMessageActionsProps) {
   const waitingReceive = message.loadingStatus === 'wait_first'
-  const isUser = message.role == 'user'
+  const isUser = message.senderType == 'user'
+  const sender = message.sender
+
+  const renderAvatar = () => {
+    const avatarSx = {
+      height: '32px',
+      width: '32px',
+      fontSize: '16px',
+      bgcolor: isUser ? 'primary.main' : 'secondary.main',
+    }
+    if (sender && sender.avatarUrl) {
+      return <Avatar sx={avatarSx} src={sender.avatarUrl} />
+    }
+
+    return <Avatar sx={avatarSx}>{isUser ? 'U' : 'C'} </Avatar>
+  }
+
+  const displayName = sender ? sender.displayName : isUser ? 'User' : 'Bot'
 
   return (
     <ListItem
@@ -118,18 +131,7 @@ export default function ChatMessageItem({
         gap: '8px',
       }}
     >
-      <ListItemAvatar sx={{ minWidth: 0 }}>
-        <Avatar
-          sx={{
-            height: '32px',
-            width: '32px',
-            fontSize: '16px',
-            bgcolor: isUser ? 'primary.main' : 'secondary.main',
-          }}
-        >
-          {isUser ? 'U' : 'C'}{' '}
-        </Avatar>
-      </ListItemAvatar>
+      <ListItemAvatar sx={{ minWidth: 0 }}>{renderAvatar()}</ListItemAvatar>
       <Box
         sx={{
           display: 'flex',
@@ -139,7 +141,7 @@ export default function ChatMessageItem({
         }}
       >
         <Box component="span" lineHeight="1" fontSize="13px" color="#AAAAAA">
-          {isUser ? 'User' : 'ChatGPT'}
+          {displayName}
         </Box>
         <Box display="flex" flexDirection="column" gap="2px">
           <Paper

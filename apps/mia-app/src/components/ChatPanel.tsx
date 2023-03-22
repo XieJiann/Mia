@@ -82,10 +82,6 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
           onRegenerateMessage={handleRegenerateMessage}
           onStopGenerateMessage={stopGenerateMessage}
         />
-        {/* <ScrollToBottomButton /> */}
-        {/* Workaround, use dummy div */}
-        {/* <Box sx={{ height: '80px' }}></Box> */}
-        {/* </List> */}
       </Box>
 
       {/* Input bar */}

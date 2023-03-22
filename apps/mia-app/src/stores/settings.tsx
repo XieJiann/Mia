@@ -1,75 +1,55 @@
 import { create } from 'zustand'
 import { persist, devtools } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
-import { Settings } from '../backend/models'
-import { miaService } from '../backend/service'
-
-export interface OpenAiProfile {
-  name: string
-  endpoint: string
-  apiKey?: string
-  desc?: string
-}
+import { Settings, User } from '../backend/models'
+import { getDefaultSettings, GetLoading, miaService } from '../backend/service'
 
 type SettingsStore = {
   ui: {
     mainDrawerOpened: boolean
   }
 
-  addOpenAiProfile(profile: OpenAiProfile): void
-  setOpenaiProfile(profile: OpenAiProfile): void
+  main: Settings
+
+  updateMainSettings(settings: Settings): Promise<void>
   openMainDrawer(): void
   closeMainDrawer(): void
   toggleMainDrawer(): void
-} & Settings
+}
 
-const defaultOpenaiProfiles: OpenAiProfile[] = [
-  {
-    name: 'openai-offical',
-    endpoint: 'https://api.openai.com',
-    apiKey: '',
-  },
-]
+const settingsStoreCreator = immer<SettingsStore>((set, get) => {
+  return {
+    ui: {
+      mainDrawerOpened: false,
+    },
+    main: getDefaultSettings(),
 
-const settingsStoreCreator = immer<SettingsStore>((set, get) => ({
-  ui: {
-    mainDrawerOpened: false,
-  },
-  apiClient: {
-    usedOpenaiProfile: defaultOpenaiProfiles[0],
-  },
-  openaiProfiles: defaultOpenaiProfiles,
+    async updateMainSettings(settings) {
+      miaService.updateSettings(settings)
+      set((s) => {
+        s.main = settings
+      })
+    },
 
-  addOpenAiProfile(profile: OpenAiProfile) {
-    set((s) => {
-      s.openaiProfiles.push(profile)
-    })
-  },
+    openMainDrawer() {
+      set((s) => {
+        s.ui.mainDrawerOpened = true
+      })
+    },
 
-  setOpenaiProfile(profile: OpenAiProfile) {
-    set((s) => {
-      s.apiClient.usedOpenaiProfile = profile
-    })
-  },
+    closeMainDrawer() {
+      set((s) => {
+        s.ui.mainDrawerOpened = false
+      })
+    },
 
-  openMainDrawer() {
-    set((s) => {
-      s.ui.mainDrawerOpened = true
-    })
-  },
-
-  closeMainDrawer() {
-    set((s) => {
-      s.ui.mainDrawerOpened = false
-    })
-  },
-
-  toggleMainDrawer() {
-    set((s) => {
-      s.ui.mainDrawerOpened = !s.ui.mainDrawerOpened
-    })
-  },
-}))
+    toggleMainDrawer() {
+      set((s) => {
+        s.ui.mainDrawerOpened = !s.ui.mainDrawerOpened
+      })
+    },
+  }
+})
 
 export const useSettingsStore = create(
   devtools(
@@ -83,12 +63,7 @@ export const useSettingsStore = create(
 )
 
 function init() {
-  miaService.updateSettings(useSettingsStore.getState())
-  useSettingsStore.subscribe((settings, prevSettings) => {
-    if (settings.apiClient !== prevSettings.apiClient) {
-      miaService.updateSettings(settings)
-    }
-  })
+  miaService.updateSettings(useSettingsStore.getState().main)
 }
 
 init()

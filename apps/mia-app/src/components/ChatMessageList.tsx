@@ -1,5 +1,4 @@
 import { Box, List } from '@mui/material'
-import React from 'react'
 import { useRef } from 'react'
 import { Virtuoso, VirtuosoProps } from 'react-virtuoso'
 import * as chat_t from '../stores/chat'

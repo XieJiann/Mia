@@ -6,29 +6,24 @@ import { api_t, OpenAIClient } from '../api'
 import { Collection, Model, Q } from '@nozbe/watermelondb'
 import { Result } from '../types'
 
+// Consts
+export const Constants = {
+  SettingsKey: '_settings',
+  DefaultUserId: '_user',
+} as const
+
 class NotFoundError extends Error {}
 
-async function getByIdFromTable<T extends Model>(
-  table: Collection<T>,
-  id: string
-): Promise<Result<T>> {
-  try {
-    const res = await table.find(id)
-    return { ok: true, value: res }
-  } catch (e) {
-    return { ok: false, error: new NotFoundError(`id=${id} not found`) }
-  }
-}
-
-const defaultSettings: models.Settings = {
-  apiClient: {
-    usedOpenaiProfile: {
-      name: 'openai-offical',
-      endpoint: 'https://api.openai.com',
-      apiKey: '',
+export function getDefaultSettings(): models.Settings {
+  return {
+    apiSettings: {
+      openaiApiEndpoint: 'https://api.openai.com',
+      openaiApiKey: '',
     },
-  },
-  openaiProfiles: [],
+    chatDefaultSettings: {
+      defaultBotName: 'chatgpt',
+    },
+  }
 }
 
 export type GetLoading<T> = {
@@ -76,8 +71,8 @@ export type ListPage<T> = {
   loading: boolean
 }
 
-import type { Character, Chat, ChatMessage, ChatMeta } from './models'
-export type { Character, Chat, ChatMessage, ChatMeta }
+import type { Character, Chat, ChatMessageMeta, ChatMeta } from './models'
+export type { Character, Chat, ChatMessageMeta as ChatMessage, ChatMeta }
 
 interface MessageStreamCallbacks {
   onMessageUpdated: (messageId: string) => void
@@ -88,21 +83,74 @@ export class MiaService {
   private chatTable = database.get<models.ChatModel>('chats')
   private characterTable = database.get<models.CharacterModel>('characters')
   private messageTable = database.get<models.ChatMessageModel>('chat_messages')
-  private settings: models.Settings = defaultSettings
+  private userTable = database.get<models.UserModel>('users')
+  private botTable = database.get<models.BotModel>('bots')
+
+  private settings: models.Settings
   private openaiClient: OpenAIClient
 
   constructor() {
-    this.openaiClient = new OpenAIClient(
-      this.settings.apiClient.usedOpenaiProfile
-    )
+    this.settings = getDefaultSettings()
+    this.openaiClient = new OpenAIClient({
+      endpoint: '',
+      apiKey: '',
+    })
   }
 
+  // Settings
   updateSettings(settings: models.Settings) {
-    console.log('updateSettings', settings)
-    this.settings = settings
-    this.openaiClient = new OpenAIClient(
-      this.settings.apiClient.usedOpenaiProfile
+    const apiSettings = settings.apiSettings
+    this.openaiClient = new OpenAIClient({
+      endpoint: apiSettings.openaiApiEndpoint,
+      apiKey: apiSettings.openaiApiKey,
+    })
+  }
+
+  // Users
+  // async getUserSettings(): Promise<{
+  //   name: string
+  //   displayName: string
+  //   avatarUrl: string
+  // }> {}
+
+  // Users
+  async getCurrentUser(): Promise<Result<models.User>> {
+    const userRes = await getByIdFromTable(
+      this.userTable,
+      Constants.DefaultUserId
     )
+
+    if (!userRes.ok) {
+      return userRes
+    }
+
+    return {
+      ok: true,
+      value: {
+        ...userRes.value.getRawObject(),
+      },
+    }
+  }
+
+  async updateCurrentUser(p: {
+    displayName: string
+    avatarUrl: string
+  }): Promise<void> {
+    await database.write(async () => {
+      const user = await getByIdFromTable(
+        this.userTable,
+        Constants.DefaultUserId
+      )
+      if (!user.ok) {
+        console.error(user.error)
+        return
+      }
+
+      user.value.update((b) => {
+        b.displayName = p.displayName
+        b.avatarUrl = p.avatarUrl
+      })
+    })
   }
 
   // Characters
@@ -191,11 +239,23 @@ export class MiaService {
       .extend(Q.sortBy('created_at', 'asc'))
       .fetch()
 
+    // TODO: optimize sender fetch logic, handle error
+    const messageWithSenders: models.ChatMessage[] = await Promise.all(
+      messages.map(async (m) => {
+        const sender = await this.getMessageSenderById(m.senderType, m.senderId)
+        console.log(m, sender)
+        return {
+          ...m.getRawObject(),
+          sender: sender.value,
+        }
+      })
+    )
+
     return {
       ok: true,
       value: {
         ...chat.getRawObject(),
-        messages: messages.map((m) => m.getRawObject()),
+        messages: messageWithSenders,
       },
     }
   }
@@ -253,9 +313,54 @@ export class MiaService {
   }
 
   // messages
-  async getMessageById(id: string): Promise<ChatMessage> {
+  async getMessageById(id: string): Promise<models.ChatMessage> {
     const message = await this.messageTable.find(id)
-    return message.getRawObject()
+    const sender = await this.getMessageSenderById(
+      message.senderType,
+      message.senderId
+    )
+    return {
+      ...message.getRawObject(),
+      sender: sender.value,
+    }
+  }
+
+  async getMessageSenderById(
+    senderType: 'bot' | 'user',
+    senderId: string
+  ): Promise<Result<models.MessageSender>> {
+    if (senderType === 'bot') {
+      const res = await getByIdFromTable(this.botTable, senderId)
+      if (!res.ok) {
+        return res
+      }
+      const value = res.value
+      return {
+        ok: true,
+        value: {
+          ...value.getRawObject(),
+          type: senderType,
+          displayName: value.displayName || value.name,
+        },
+      }
+    }
+
+    // user
+    const res = await getByIdFromTable(this.userTable, senderId)
+    if (!res.ok) {
+      return res
+    }
+
+    const value = res.value
+    return {
+      ok: true,
+      value: {
+        ...value.getRawObject(),
+        type: senderType,
+        id: senderId,
+        displayName: value.displayName || value.name,
+      },
+    }
   }
 
   async stopGenerateMessage(p: { messageId: string }) {
@@ -348,6 +453,8 @@ export class MiaService {
     const { replyMsg } = await database.write(async () => {
       await this.messageTable.create((m) => {
         m.chat.id = chat.id
+        m.senderType = 'user'
+        m.senderId = '_user'
         m.role = 'user'
         m.content = p.content
       })
@@ -358,6 +465,8 @@ export class MiaService {
       const replyMsg = await this.messageTable.create((m) => {
         m.chat.id = chat.id
         m.role = 'assistant'
+        m.senderType = 'bot'
+        m.senderId = '_chatgpt'
         m.content = ''
         m.loadingStatus = 'wait_first'
       })
@@ -453,6 +562,19 @@ export class MiaService {
       Q.where('hidden_at', null),
       Q.where('deleted_at', null)
     )
+  }
+}
+
+// Helpers
+async function getByIdFromTable<T extends Model>(
+  table: Collection<T>,
+  id: string
+): Promise<Result<T>> {
+  try {
+    const res = await table.find(id)
+    return { ok: true, value: res }
+  } catch (e) {
+    return { ok: false, error: new NotFoundError(`id=${id} not found`) }
   }
 }
 
