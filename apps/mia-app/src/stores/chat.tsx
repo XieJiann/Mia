@@ -187,7 +187,7 @@ function createChatStore() {
         chatId: string
         content: string
       }): Promise<Result<boolean>> {
-        const resp = await miaService.sendNewMessageStream({
+        const resp = await miaService.sendNewMessage({
           ...p,
           onChatUpdated(chatId) {
             handleRefreshChat(chatId)
@@ -201,7 +201,7 @@ function createChatStore() {
 
       async regenerateMessageStream(p) {
         // more fine-grained refresh
-        const resp = await miaService.regenerateMessageStream({
+        const resp = await miaService.regenerateMessage({
           ...p,
           onChatUpdated(chatId) {
             handleRefreshChat(chatId)

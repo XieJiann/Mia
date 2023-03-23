@@ -9,6 +9,7 @@ import {
 import { shallow } from '../stores'
 import { useSettingsStore } from '../stores/settings'
 import {
+  ArrowBack,
   ColorLensOutlined,
   DarkModeOutlined,
   LightModeOutlined,
@@ -17,8 +18,15 @@ import {
   RefreshOutlined,
 } from '@mui/icons-material'
 import { useThemeMode, useThemeScheme } from '../themes/m3'
+import { useNavigate } from 'react-router-dom'
 
-export default function BaseAppBar({ title }: { title?: string }) {
+export default function BaseAppBar({
+  title,
+  leftActionMode = 'more',
+}: {
+  title?: string
+  leftActionMode?: 'more' | 'back'
+}) {
   const [toggleMainDrawer] = useSettingsStore(
     (s) => [s.toggleMainDrawer],
     shallow
@@ -29,6 +37,8 @@ export default function BaseAppBar({ title }: { title?: string }) {
   const { toggleThemeMode, resetThemeMode } = useThemeMode()
   const { generateThemeScheme, resetThemeScheme } = useThemeScheme()
 
+  const navigate = useNavigate()
+
   const handleChangeThemeScheme = () => {
     const randomColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`
     generateThemeScheme(randomColor)
@@ -36,6 +46,36 @@ export default function BaseAppBar({ title }: { title?: string }) {
 
   const handleResetTheme = () => {
     resetThemeScheme()
+  }
+
+  const renderLeftAction = () => {
+    if (leftActionMode === 'more') {
+      return (
+        <IconButton
+          size="large"
+          edge="start"
+          color="inherit"
+          onClick={toggleMainDrawer}
+        >
+          <MenuIcon />
+        </IconButton>
+      )
+    } else if (leftActionMode === 'back') {
+      return (
+        <IconButton
+          size="large"
+          edge="start"
+          color="inherit"
+          onClick={() => {
+            navigate(-1)
+          }}
+        >
+          <ArrowBack />
+        </IconButton>
+      )
+    }
+
+    return null
   }
 
   return (
@@ -49,16 +89,7 @@ export default function BaseAppBar({ title }: { title?: string }) {
       color="default"
       elevation={0}
     >
-      <Toolbar>
-        <IconButton
-          size="large"
-          edge="start"
-          color="inherit"
-          onClick={toggleMainDrawer}
-        >
-          <MenuIcon />
-        </IconButton>
-      </Toolbar>
+      <Toolbar>{renderLeftAction()}</Toolbar>
       <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
         {title || 'Mia'}
       </Typography>

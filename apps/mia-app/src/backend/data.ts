@@ -21,6 +21,16 @@ const bots: (Omit<BotMeta, 'createdAt' | 'updatedAt'> & {
     botTemplateParams: {},
     description: 'default bot for openai-chat',
   },
+  {
+    id: '_dalle',
+    kind: '',
+    name: 'dalle',
+    displayName: 'Dall-E',
+    avatarUrl: '/avatars/bot_chatgpt.png',
+    botTemplateId: '_openai-image',
+    botTemplateParams: {},
+    description: 'default bot for openai-image',
+  },
 ]
 
 const botTemplates: Omit<BotTemplate, 'createdAt' | 'updatedAt'>[] = [
@@ -42,8 +52,7 @@ const users: Omit<User, 'createdAt' | 'updatedAt'>[] = [
     id: '_user',
     name: 'user',
     displayName: 'User',
-    avatarUrl:
-      '/avatars/user_ghost.png',
+    avatarUrl: '/avatars/user_ghost.png',
   },
 ]
 

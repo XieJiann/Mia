@@ -40,3 +40,26 @@ export interface CreateChatCompletionsReplyEventData {
     finish_reason: 'length' | 'stop' | 'timeout'
   }[]
 }
+
+export interface OpenAIGenerateImageRequest {
+  // A text description of the desired image(s). The maximum length is 1000 characters.
+  prompt: string
+  // The number of images to generate. Must be between 1 and 10.
+  // default: 1
+  n?: number
+  // The size of the generated images. Must be one of 256x256, 512x512, or 1024x1024.
+  // default: 1024x1024
+  size?: string
+  // The format in which the generated images are returned. Must be one of url or b64_json.
+  // default: url
+  response_format?: string
+  // A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse. Learn more.
+  user?: string
+}
+
+export interface OpenAIGenerateImageReply {
+  created: number
+  data: {
+    url: string
+  }[]
+}

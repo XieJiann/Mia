@@ -397,6 +397,17 @@ export class BotTemplateModel extends Model {
 
   @date('deleted_at')
   deletedAt?: Date
+
+  getRawObject(): BotTemplate {
+    return {
+      id: this.id,
+      name: this.name,
+      description: this.description,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      deletedAt: this.deletedAt,
+    }
+  }
 }
 
 // Model Raw Types

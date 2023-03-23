@@ -65,7 +65,7 @@ export function DrawerChatList() {
       <List
         sx={{
           height: '100%',
-          overflowY: 'scroll',
+          overflowY: 'auto',
         }}
       >
         {sortedChats.data.map((chat) => (

@@ -28,3 +28,24 @@ export function formatErrorUserFriendly(error: unknown) {
 
   return `${error}`
 }
+
+// Extract botname prefix, like `@chatgpt hello, world` -> {name: chatgpt, content: '@chatgpt ...', trimedContent: 'hello, world'}
+export function extractBotNamePrefix(content: string): {
+  name: string
+  content: string
+  trimedContent: string
+} {
+  const match = content.match(/^@([^@\s]+)\s*(.*)/)
+  if (match) {
+    return {
+      name: match[1],
+      content: match[0],
+      trimedContent: match[2],
+    }
+  }
+  return {
+    name: '',
+    content,
+    trimedContent: content,
+  }
+}

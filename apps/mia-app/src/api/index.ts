@@ -1,7 +1,7 @@
 export * as api_t from './types'
 import * as api_t from './types'
 import axios, { AxiosInstance } from 'axios'
-import { Result } from '../types'
+import { Result, IStreamHandler, makeStreamHandler } from '../types'
 import { formatErrorUserFriendly } from '../utils'
 
 export class ApiClientError extends Error {}
@@ -45,6 +45,41 @@ export class OpenAIClient {
     return false
   }
 
+  // @see https://platform.openai.com/docs/api-reference/images/create
+  generateImages(
+    req: api_t.OpenAIGenerateImageRequest
+  ): IStreamHandler<api_t.OpenAIGenerateImageReply> {
+    return makeStreamHandler(async (state) => {
+      const headers = this.getHeaders()
+      try {
+        const resp = await this.httpClient.post('/v1/images/generations', req, {
+          headers,
+          signal: state.getAbortController().signal,
+        })
+
+        if (resp.status !== 200) {
+          return {
+            ok: false,
+            error: new ApiClientError(`failed to request, erro=${resp.data}`),
+          }
+        }
+
+        state.addData(resp.data)
+        state.markFinished()
+
+        return {
+          ok: true,
+          value: true,
+        }
+      } catch (e) {
+        return {
+          ok: false,
+          error: new ApiClientError(`failed to request, erro=${e}`),
+        }
+      }
+    })
+  }
+
   async createChatCompletions(
     req: api_t.CreateChatCompletionsRequest
   ): Promise<Result<api_t.CreateChatCompletionsReply>> {
@@ -64,93 +99,100 @@ export class OpenAIClient {
     return { ok: true, value: resp.data }
   }
 
-  async createChatCompletionsStream(
-    req: api_t.CreateChatCompletionsRequest,
-    cb: (data: api_t.CreateChatCompletionsReplyEventData[]) => void
-  ): Promise<Result<boolean>> {
-    const headers = this.getHeaders()
+  createChatCompletionsStream(
+    req: api_t.CreateChatCompletionsRequest
+  ): IStreamHandler<api_t.CreateChatCompletionsReplyEventData[]> {
+    return makeStreamHandler(async (state) => {
+      const headers = this.getHeaders()
 
-    let resp: Response | undefined = undefined
+      let resp: Response | undefined = undefined
 
-    try {
-      // encounter problem when use stream in axios
-      resp = await fetch(`${this.opts.endpoint}/v1/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          ...req,
-          stream: true,
-        }),
-      })
-    } catch (e) {
-      return {
-        ok: false,
-        error: new ApiClientError(
-          `encouter error when request, err=${formatErrorUserFriendly(e)}`,
-          {
-            cause: e,
-          }
-        ),
-      }
-    }
-
-    if (!resp.ok) {
-      const text = await resp.text()
-      return {
-        ok: false,
-        error: new ApiClientError(`failed to request, erro=${text}`),
-      }
-    }
-
-    const stream: ReadableStream<Uint8Array> | null = resp.body
-
-    if (stream) {
       try {
-        const reader = stream.getReader()
-        while (true) {
-          const { done, value } = await reader.read()
-
-          const result = this.parseChatCompletionStream(
-            new TextDecoder().decode(value)
-          )
-
-          if (done) {
-            break
-          }
-
-          let has_done = false
-          const events: api_t.CreateChatCompletionsReplyEventData[] = []
-
-          for (const event of result) {
-            if (event === '[DONE]') {
-              has_done = true
-            } else {
-              events.push(event)
-            }
-          }
-
-          cb(events)
-
-          if (has_done) {
-            break
-          }
-        }
+        // encounter problem when use stream in axios
+        resp = await fetch(`${this.opts.endpoint}/v1/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            ...req,
+            stream: true,
+          }),
+          signal: state.getAbortController().signal,
+        })
       } catch (e) {
         return {
           ok: false,
           error: new ApiClientError(
-            `encouter error when parse stream, err=${formatErrorUserFriendly(
-              e
-            )}`,
+            `encouter error when request, err=${formatErrorUserFriendly(e)}`,
             {
               cause: e,
             }
           ),
         }
       }
-    }
 
-    return { ok: true, value: true }
+      if (!resp.ok) {
+        const text = await resp.text()
+        return {
+          ok: false,
+          error: new ApiClientError(`failed to request, erro=${text}`),
+        }
+      }
+
+      const stream: ReadableStream<Uint8Array> | null = resp.body
+
+      if (stream) {
+        // register abort handler
+        state.getAbortController().signal.addEventListener('abort', () => {
+          stream.cancel()
+        })
+
+        try {
+          const reader = stream.getReader()
+          while (true) {
+            const { done, value } = await reader.read()
+
+            const result = this.parseChatCompletionStream(
+              new TextDecoder().decode(value)
+            )
+
+            if (done) {
+              break
+            }
+
+            let has_done = false
+            const events: api_t.CreateChatCompletionsReplyEventData[] = []
+
+            for (const event of result) {
+              if (event === '[DONE]') {
+                has_done = true
+              } else {
+                events.push(event)
+              }
+            }
+
+            state.addData(events)
+
+            if (has_done) {
+              break
+            }
+          }
+        } catch (e) {
+          return {
+            ok: false,
+            error: new ApiClientError(
+              `encouter error when parse stream, err=${formatErrorUserFriendly(
+                e
+              )}`,
+              {
+                cause: e,
+              }
+            ),
+          }
+        }
+      }
+
+      return { ok: true, value: true }
+    })
   }
 
   // from https://github.com/ztjhz/ChatGPTFreeApp/blob/main/src/api/helper.ts#L7-L22

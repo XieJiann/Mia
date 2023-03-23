@@ -4,12 +4,18 @@ export * as models from './models'
 import { database } from './db'
 import { api_t, OpenAIClient } from '../api'
 import { Collection, Model, Q } from '@nozbe/watermelondb'
-import { Result } from '../types'
+import { IStreamHandler, Result } from '../types'
 
 // Consts
 export const Constants = {
   SettingsKey: '_settings',
   DefaultUserId: '_user',
+
+  PredefinedBotIds: new Set(['_chatgpt', '_dalle']),
+  PredefinedBotTemplateIds: new Set(['_openai-chat', '_openai-image']),
+
+  BotTemplateOpenaiChat: '_openai-chat',
+  BotTemplateOpenaiImage: '_openai-image',
 } as const
 
 class NotFoundError extends Error {}
@@ -72,6 +78,8 @@ export type ListPage<T> = {
 }
 
 import type { Character, Chat, ChatMessageMeta, ChatMeta } from './models'
+import { IBotService, MessageReply } from './bots'
+import { extractBotNamePrefix } from '../utils'
 export type { Character, Chat, ChatMessageMeta as ChatMessage, ChatMeta }
 
 interface MessageStreamCallbacks {
@@ -101,15 +109,60 @@ function convertToOpenAIMessage(message: models.ChatMessage): {
   }
 }
 
+type BotCache = {
+  bot: models.Bot
+  botService: IBotService
+}
+
+// Internal memory state, used for cache or stream connections
+class MiaServiceState {
+  // internal states (in-memory)
+  sendMessageTaskHandler = new Map<string, IStreamHandler<MessageReply>>()
+  botNameCache = new Map<string, models.Bot>()
+
+  constructor(private miaService: MiaService) {}
+
+  async getBotByName(botName: string): Promise<Result<models.Bot>> {
+    let bot = this.botNameCache.get(botName)
+    if (!bot) {
+      const botRes = await this.miaService.getBotByName(botName)
+      if (!botRes.ok) {
+        return botRes
+      }
+
+      bot = botRes.value
+      this.botNameCache.set(botName, bot)
+    }
+
+    return {
+      ok: true,
+      value: bot,
+    }
+  }
+
+  async refreshBotByName(botName: string): Promise<void> {
+    const botRes = await this.miaService.getBotByName(botName)
+    if (!botRes.ok) {
+      return
+    }
+
+    this.botNameCache.set(botName, botRes.value)
+  }
+}
+
 export class MiaService {
   private chatTable = database.get<models.ChatModel>('chats')
   private characterTable = database.get<models.CharacterModel>('characters')
   private messageTable = database.get<models.ChatMessageModel>('chat_messages')
   private userTable = database.get<models.UserModel>('users')
   private botTable = database.get<models.BotModel>('bots')
+  private botTemplateTable =
+    database.get<models.BotTemplateModel>('bot_templates')
 
   private settings: models.Settings
   private openaiClient: OpenAIClient
+
+  private state: MiaServiceState = new MiaServiceState(this)
 
   constructor() {
     this.settings = getDefaultSettings()
@@ -122,18 +175,12 @@ export class MiaService {
   // Settings
   updateSettings(settings: models.Settings) {
     const apiSettings = settings.apiSettings
+    this.settings = settings
     this.openaiClient = new OpenAIClient({
       endpoint: apiSettings.openaiApiEndpoint,
       apiKey: apiSettings.openaiApiKey,
     })
   }
-
-  // Users
-  // async getUserSettings(): Promise<{
-  //   name: string
-  //   displayName: string
-  //   avatarUrl: string
-  // }> {}
 
   // Users
   async getCurrentUser(): Promise<Result<models.User>> {
@@ -175,12 +222,12 @@ export class MiaService {
     })
   }
 
-  // Characters
+  // Bots
 
-  async listCharacters(filters: ListFilters): Promise<ListPage<Character>> {
+  async listBots(filters: ListFilters): Promise<ListPage<models.BotMeta>> {
     const queryFilters: Q.Clause[] = [Q.where('deleted_at', null)]
 
-    const total = await this.characterTable.query(...queryFilters).fetchCount()
+    const total = await this.botTable.query(...queryFilters).fetchCount()
 
     const { pageSize = 20, currentPage = 1 } = filters
 
@@ -190,7 +237,7 @@ export class MiaService {
       Q.skip(pageSize * (currentPage - 1))
     )
 
-    const data = await this.characterTable.query(...queryFilters).fetch()
+    const data = await this.botTable.query(...queryFilters).fetch()
 
     return {
       data,
@@ -201,27 +248,105 @@ export class MiaService {
     }
   }
 
-  async createCharacter(p: {
+  async createBot(p: {
     name: string
+    displayName?: string
     avatarUrl?: string
-    descriptionPrompt?: string
-  }): Promise<Character> {
+    botTemplateId: string
+    botTemplateParams: models.BotTemplateParams
+  }): Promise<Result<models.BotMeta>> {
     return database.write(async () => {
-      return this.characterTable.create((c) => {
+      // Check if bot with same name exists
+      const count = await this.botTable
+        .query(Q.where('name', p.name))
+        .fetchCount()
+      if (count > 0) {
+        return {
+          ok: false,
+          error: new Error('Bot with same name already exists'),
+        }
+      }
+
+      const bot = await this.botTable.create((c) => {
         c.name = p.name
+        c.displayName = p.displayName || p.name
         c.avatarUrl = p.avatarUrl || ''
-        c.descriptionPrompt = p.descriptionPrompt || ''
+        c.botTemplate.id = p.botTemplateId
+        c.botTemplateParams = p.botTemplateParams
       })
+
+      return {
+        ok: true,
+        value: bot,
+      }
     })
   }
 
-  async deleteCharacter(id: string): Promise<void> {
-    await database.write(async () => {
-      const character = await this.characterTable.find(id)
-      await character.update((c) => {
-        c.deletedAt = new Date()
-      })
-    })
+  async getBotById(id: string): Promise<Result<models.Bot>> {
+    const botRes = await getByIdFromTable(this.botTable, id)
+    if (!botRes.ok) {
+      return botRes
+    }
+
+    const bot = botRes.value
+    // fetch bot template
+    const botTemplate = await bot.botTemplate.fetch()
+
+    return {
+      ok: true,
+      value: {
+        ...bot.getRawObject(),
+        botTemplate: botTemplate.getRawObject(),
+      },
+    }
+  }
+
+  async getBotByName(name: string): Promise<Result<models.Bot>> {
+    const botRes = await getOneFromTable(this.botTable, Q.where('name', name))
+    if (!botRes.ok) {
+      return botRes
+    }
+
+    const bot = botRes.value
+    // fetch bot template
+    const botTemplate = await bot.botTemplate.fetch()
+
+    return {
+      ok: true,
+      value: {
+        ...bot.getRawObject(),
+        botTemplate: botTemplate.getRawObject(),
+      },
+    }
+  }
+
+  // Bot templates
+  async listBotTemplates(
+    filters: ListFilters
+  ): Promise<ListPage<models.BotTemplate>> {
+    const queryFilters: Q.Clause[] = [Q.where('deleted_at', null)]
+
+    const total = await this.botTemplateTable
+      .query(...queryFilters)
+      .fetchCount()
+
+    const { pageSize = 20, currentPage = 1 } = filters
+
+    queryFilters.push(
+      Q.sortBy(filters.orderBy || 'created_at', filters.order),
+      Q.take(pageSize),
+      Q.skip(pageSize * (currentPage - 1))
+    )
+
+    const data = await this.botTemplateTable.query(...queryFilters).fetch()
+
+    return {
+      data,
+      currentPage,
+      pageSize,
+      total,
+      loading: false,
+    }
   }
 
   // Chats
@@ -441,7 +566,7 @@ export class MiaService {
     })
   }
 
-  async regenerateMessageStream(
+  async regenerateMessage(
     p: {
       messageId: string
       chatId: string
@@ -486,7 +611,7 @@ export class MiaService {
       .fetch()
     const toSendMessages = [...history.map((m) => convertToOpenAIMessage(m))]
 
-    const resp = await this._handleSendMessageStream({
+    const resp = await this._handleSendMessage({
       chat,
       replyMessage: message,
       toSendMessages,
@@ -496,7 +621,7 @@ export class MiaService {
     return resp
   }
 
-  async sendNewMessageStream(
+  async sendNewMessage(
     p: {
       chatId: string
       content: string
@@ -543,7 +668,7 @@ export class MiaService {
       },
     ]
 
-    return this._handleSendMessageStream({
+    return this._handleSendMessage({
       chat,
       replyMessage: replyMsg,
       toSendMessages,
@@ -551,13 +676,44 @@ export class MiaService {
     })
   }
 
-  private async _handleSendMessageStream(
+  private async _handleSendMessage(
     p: {
       chat: models.ChatModel
       replyMessage: models.ChatMessageModel
       toSendMessages: api_t.ChatCompletionMessage[]
     } & MessageStreamCallbacks
   ): Promise<Result<boolean>> {
+    if (p.toSendMessages.length === 0) {
+      return { ok: false, error: new Error('no message to send') }
+    }
+
+    const lastMessage = p.toSendMessages[p.toSendMessages.length - 1]
+    if (lastMessage.role !== 'user') {
+      return {
+        ok: false,
+        error: new Error(`last message is not sent by user`),
+      }
+    }
+
+    // try get bot
+    let botName = this.settings.chatDefaultSettings.defaultBotName
+    const { name: parsedBotName } = extractBotNamePrefix(lastMessage.content)
+    if (parsedBotName) {
+      botName = parsedBotName
+    }
+
+    const botRes = await this.state.getBotByName(botName)
+    if (!botRes.ok) {
+      return {
+        ok: false,
+        error: new Error(`failed to get bot, ${botName}`, {
+          cause: botRes.error,
+        }),
+      }
+    }
+
+    const bot = botRes.value
+
     const handleStream = async (
       events: api_t.CreateChatCompletionsReplyEventData[]
     ) => {
@@ -581,13 +737,14 @@ export class MiaService {
       p.onMessageUpdated(p.replyMessage.id)
     }
 
-    const resp = await this.openaiClient.createChatCompletionsStream(
-      {
-        model: 'gpt-3.5-turbo',
-        messages: p.toSendMessages,
-      },
-      handleStream
-    )
+    const streamHandler = this.openaiClient.createChatCompletionsStream({
+      model: 'gpt-3.5-turbo',
+      messages: p.toSendMessages,
+    })
+
+    streamHandler.onData(handleStream)
+
+    const resp = await streamHandler.wait()
 
     // sleep 50ms to make write finish
     // because watermelondb will queue the writer
@@ -635,6 +792,22 @@ async function getByIdFromTable<T extends Model>(
   } catch (e) {
     return { ok: false, error: new NotFoundError(`id=${id} not found`) }
   }
+}
+
+async function getOneFromTable<T extends Model>(
+  table: Collection<T>,
+  ...clause: Q.Clause[]
+): Promise<Result<T>> {
+  const res = await table.query(...clause).fetch()
+  if (res.length === 0) {
+    return { ok: false, error: new NotFoundError(`not found`) }
+  }
+
+  if (res.length > 1) {
+    return { ok: false, error: new Error(`not unique`) }
+  }
+
+  return { ok: true, value: res[0] }
 }
 
 export const miaService = new MiaService()

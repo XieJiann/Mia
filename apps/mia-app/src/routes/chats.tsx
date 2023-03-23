@@ -37,13 +37,13 @@ export default function ChatListPage() {
 
   return (
     <Box>
-      <BaseAppBar title="Chat List" />
+      <BaseAppBar title="Chats" />
 
       <Box>
         <List
           sx={{
             height: '100%',
-            overflowY: 'scroll',
+            overflowY: 'auto',
           }}
         >
           <ListItem key="action-add-chat">

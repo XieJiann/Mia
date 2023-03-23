@@ -1,7 +1,9 @@
 import { CssBaseline } from '@mui/material'
 import { SnackbarProvider } from 'notistack'
 import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
-import CharacterListPage from './routes/characters'
+import { BotCreatePage } from './routes/bot/create'
+import BotUpdatePage from './routes/bot/update'
+import BotListPage from './routes/bots'
 import { ChatPage } from './routes/chat'
 import ChatListPage from './routes/chats'
 import ErrorPage from './routes/error'
@@ -26,8 +28,16 @@ const router = createHashRouter([
         element: <ChatPage />,
       },
       {
-        path: '/characters',
-        element: <CharacterListPage />,
+        path: '/bots',
+        element: <BotListPage />,
+      },
+      {
+        path: '/bots/:botId/update',
+        element: <BotUpdatePage />,
+      },
+      {
+        path: '/bots/create',
+        element: <BotCreatePage />,
       },
       {
         path: '/settings',
@@ -43,9 +53,9 @@ function App() {
   return (
     <CssBaseline>
       <M3ThemeProvider>
-      <SnackbarProvider maxSnack={3}>
-      <RouterProvider router={router} />
-      </SnackbarProvider>
+        <SnackbarProvider maxSnack={3}>
+          <RouterProvider router={router} />
+        </SnackbarProvider>
       </M3ThemeProvider>
     </CssBaseline>
   )

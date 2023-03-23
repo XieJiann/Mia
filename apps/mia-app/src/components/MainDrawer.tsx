@@ -57,10 +57,10 @@ function MainDrawer({ width }: { width: number }) {
           },
         },
         {
-          name: 'Characters',
+          name: 'Bots',
           icon: <Diversity1Icon />,
           onClick: () => {
-            navigate('/characters', { replace: false })
+            navigate('/bots', { replace: false })
           },
         },
         {
