@@ -1,10 +1,15 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import * as models from '../backend/models'
-import { GetLoading, miaService } from '../backend/service'
+import { Constants, GetLoading, miaService } from '../backend/service'
+import { Result } from '../types'
 
 export type UserStore = {
-  currentUser: GetLoading<models.User>
+  users: {
+    [id: string]: Result<models.User>
+  }
+
+  currentUserId: string
 
   updateCurrentUser(p: {
     displayName: string
@@ -19,16 +24,13 @@ function CreateUserStore() {
       const user = await miaService.getCurrentUser()
 
       set((s) => {
-        s.currentUser.loading = false
-        s.currentUser.error = user.error
-        s.currentUser.value = user.value
+        s.users[s.currentUserId] = user
       })
     }
 
     return {
-      currentUser: {
-        loading: false,
-      },
+      currentUserId: Constants.DefaultUserId,
+      users: {},
 
       async updateCurrentUser(p) {
         await miaService.updateCurrentUser(p)
@@ -36,16 +38,14 @@ function CreateUserStore() {
       },
 
       getCurrentUser() {
-        const user = get().currentUser
+        const user = get().users[get().currentUserId]
 
         // load user
-        if (!user.value && !user.loading) {
+        if (!user) {
           handleRefreshCurrentUser()
-          set((s) => {
-            s.currentUser.loading = true
-          })
+          return { loading: true }
         }
-        return get().currentUser
+        return { loading: false, value: user.value, error: user.error }
       },
     }
   })

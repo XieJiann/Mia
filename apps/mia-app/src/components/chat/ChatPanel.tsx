@@ -48,10 +48,7 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
     }
   )
 
-  const chatMessages = useMemo(
-    () => chat.messages.filter((m) => m.role !== 'system'),
-    [chat.messages]
-  )
+  const chatMessages = useMemo(() => chat.messages, [chat.messages])
 
   return (
     <Box

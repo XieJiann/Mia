@@ -14,6 +14,7 @@ import {
   DeleteOutline,
 } from '@mui/icons-material'
 import { ChatStore } from '../../stores/chat'
+import CollpaseButton from '../forms/CollapseButton'
 
 export type ConfirmingActionKeys = 'edit' | 'delete'
 export interface ChatMessageActionBarProps {
@@ -44,11 +45,18 @@ export default function ChatMessageActionBar({
     message.loadingStatus === 'loading' ||
     message.loadingStatus === 'wait_first'
 
-  const isHide = message.hiddenAt
+  const isIgnored = message.ignoreAt
+  const isCollapsed = message.ui.collapsed
 
   const toggleVisible = () => {
     onUpdateMessage(message.id, {
-      toggleHide: true,
+      toggleIgnore: true,
+    })
+  }
+
+  const toggleCollapse = () => {
+    onUpdateMessage(message.id, {
+      toggleCollapse: true,
     })
   }
 
@@ -77,17 +85,6 @@ export default function ChatMessageActionBar({
 
     return (
       <>
-        <Tooltip title="Delete Message">
-          <IconButton
-            size="small"
-            color="secondary"
-            onClick={(e) => {
-              onStartConfirming('delete')
-            }}
-          >
-            <DeleteOutline fontSize="inherit" />
-          </IconButton>
-        </Tooltip>
         <Tooltip title="Edit Message">
           <IconButton
             size="small"
@@ -99,6 +96,17 @@ export default function ChatMessageActionBar({
             <EditOutlined fontSize="inherit" />
           </IconButton>
         </Tooltip>
+        <Tooltip title="Delete Message">
+          <IconButton
+            size="small"
+            color="secondary"
+            onClick={(e) => {
+              onStartConfirming('delete')
+            }}
+          >
+            <DeleteOutline fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
       </>
     )
   }
@@ -106,9 +114,12 @@ export default function ChatMessageActionBar({
   const renderButtons = () => {
     return (
       <Stack direction="row">
-        <Tooltip title={isHide ? 'Unhide' : 'Hide'}>
+        <Tooltip title={isCollapsed ? 'Expand' : 'Collapse'}>
+          <CollpaseButton collapsed={isCollapsed} onClick={toggleCollapse} />
+        </Tooltip>
+        <Tooltip title={isIgnored ? 'Unignore' : 'Ignore'}>
           <IconButton size="small" onClick={toggleVisible}>
-            {isHide ? (
+            {isIgnored ? (
               <Visibility fontSize="inherit" />
             ) : (
               <VisibilityOff fontSize="inherit" />

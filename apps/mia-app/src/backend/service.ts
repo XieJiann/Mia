@@ -79,6 +79,28 @@ interface MessageStreamCallbacks {
   onChatUpdated: (chatId: string) => void
 }
 
+function convertToOpenAIMessage(message: models.ChatMessage): {
+  content: string
+  role: api_t.ChatCompletionMessage['role']
+} {
+  const convertRole = (
+    senderType: models.ChatMessage['senderType']
+  ): api_t.ChatCompletionMessage['role'] => {
+    if (senderType === 'bot') {
+      return 'assistant'
+    } else if (senderType === 'user') {
+      return 'user'
+    } else {
+      return 'system'
+    }
+  }
+
+  return {
+    content: message.content,
+    role: convertRole(message.senderType),
+  }
+}
+
 export class MiaService {
   private chatTable = database.get<models.ChatModel>('chats')
   private characterTable = database.get<models.CharacterModel>('characters')
@@ -315,8 +337,9 @@ export class MiaService {
 
   async updateMessage(
     id: string,
-    p: { content?: string; toggleHide?: boolean }
+    p: { content?: string; toggleIgnore?: boolean; toggleCollapse?: boolean }
   ): Promise<void> {
+    console.debug(`call updateMessage(${id})`, p)
     await database.write(async () => {
       const message = await this.messageTable.find(id)
       return await message.update((b) => {
@@ -324,11 +347,19 @@ export class MiaService {
           b.content = p.content
         }
 
-        if (p.toggleHide) {
-          if (b.hiddenAt) {
-            b.hiddenAt = undefined
+        if (p.toggleIgnore) {
+          if (b.ignoreAt) {
+            b.ignoreAt = undefined
           } else {
-            b.hiddenAt = new Date()
+            b.ignoreAt = new Date()
+          }
+        }
+
+        if (p.toggleCollapse) {
+          if (b.ui.collapsed) {
+            b.ui = { ...b.ui, collapsed: false }
+          } else {
+            b.ui = { ...b.ui, collapsed: true }
           }
         }
       })
@@ -425,19 +456,19 @@ export class MiaService {
     if (!message) {
       return { ok: false, error: new Error('Message not found') }
     }
-    if (message.role !== 'assistant') {
+    if (message.senderType !== 'bot') {
       return {
         ok: false,
         error: new Error(
-          `message is not assistant message, got=${message.role}`
+          `message is not sent by bot, got=${message.senderType}`
         ),
       }
     }
 
-    if (message.deletedAt || message.hiddenAt) {
+    if (message.deletedAt) {
       return {
         ok: false,
-        error: new Error(`message is either hidden or deleted`),
+        error: new Error(`message is deleted`),
       }
     }
 
@@ -453,9 +484,7 @@ export class MiaService {
     const history = await this._queryFilteredHistory(chat)
       .extend(Q.where('created_at', Q.lt(message.createdAt.getTime())))
       .fetch()
-    const toSendMessages = [
-      ...history.map((m) => ({ role: m.role, content: m.content })),
-    ]
+    const toSendMessages = [...history.map((m) => convertToOpenAIMessage(m))]
 
     const resp = await this._handleSendMessageStream({
       chat,
@@ -486,7 +515,6 @@ export class MiaService {
         m.chat.id = chat.id
         m.senderType = 'user'
         m.senderId = '_user'
-        m.role = 'user'
         m.content = p.content
         m.loadingStatus = 'ok'
       })
@@ -496,7 +524,6 @@ export class MiaService {
 
       const replyMsg = await this.messageTable.create((m) => {
         m.chat.id = chat.id
-        m.role = 'assistant'
         m.senderType = 'bot'
         m.senderId = '_chatgpt'
         m.content = ''
@@ -509,10 +536,7 @@ export class MiaService {
     p.onChatUpdated(chat.id)
 
     const toSendMessages: api_t.ChatCompletionMessage[] = [
-      ...history.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      ...history.map((m) => convertToOpenAIMessage(m)),
       {
         role: 'user',
         content: p.content,
@@ -539,7 +563,10 @@ export class MiaService {
     ) => {
       let newContent = ''
       for (const event of events) {
-        newContent += event.choices[0].delta.content || ''
+        let eventContent = event.choices[0].delta.content
+        if (eventContent != null) {
+          newContent += eventContent
+        }
       }
 
       await database.write(async () => {
@@ -547,7 +574,7 @@ export class MiaService {
           if (m.loadingStatus === 'wait_first') {
             m.loadingStatus = 'loading'
           }
-          m.content += newContent
+          m.content = m.content + newContent
         })
       })
 
@@ -591,7 +618,7 @@ export class MiaService {
   private _queryFilteredHistory(chat: models.ChatModel) {
     return chat.messages.extend(
       Q.sortBy('created_at', 'asc'),
-      Q.where('hidden_at', null),
+      Q.where('ignore_at', null),
       Q.where('deleted_at', null)
     )
   }

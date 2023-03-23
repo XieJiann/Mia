@@ -51,7 +51,7 @@ export type ChatStore = {
 
   updateMessage: MiaService['updateMessage']
 
-  deleteMessage: MiaService['deleteMessage']
+  deleteMessage: (p: { chatId: string; messageId: string }) => Promise<void>
 
   stopGenerateMessage(p: { messageId: string }): Promise<void>
 
@@ -81,11 +81,11 @@ function createChatStore() {
       }
     }
 
-    const handleRefreshChat = (id: string) => {
-      miaService.getChatById(id).then((chat) => {
-        set((s) => {
-          s.chats[id] = chat
-        })
+    const handleRefreshChat = async (id: string) => {
+      const chat = await miaService.getChatById(id)
+
+      set((s) => {
+        s.chats[id] = chat
       })
     }
 
@@ -173,9 +173,9 @@ function createChatStore() {
         await handleRefreshMessage(id)
       },
 
-      async deleteMessage(id) {
-        await miaService.deleteMessage(id)
-        await handleRefreshMessage(id)
+      async deleteMessage(p) {
+        await miaService.deleteMessage(p.messageId)
+        await handleRefreshChat(p.chatId)
       },
 
       async stopGenerateMessage(p) {

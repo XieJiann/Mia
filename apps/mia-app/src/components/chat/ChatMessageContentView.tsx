@@ -33,10 +33,7 @@ const ChatMessageContentViewImpl = React.memo(
           code({ node, inline, className, children, ...props }) {
             if (inline)
               return (
-                <Box
-                  component="code"
-                  sx={{ overflowX: 'scroll', display: 'block' }}
-                >
+                <Box component="code" sx={{ overflowX: 'auto' }}>
                   {children}
                 </Box>
               )
@@ -44,11 +41,14 @@ const ChatMessageContentViewImpl = React.memo(
 
             const match = /language-(\w+)/.exec(className || '')
             const lang = match && match[1]
-            if (lang)
+            // @see https://github.com/highlightjs/highlight.js/issues/2337
+            if (lang && hljs.getLanguage(lang)) {
               highlight = hljs.highlight(children.toString(), {
                 language: lang,
               })
-            else highlight = hljs.highlightAuto(children.toString())
+            } else {
+              highlight = hljs.highlightAuto(children.toString())
+            }
 
             return (
               <Box sx={{ borderRadius: '8px' }}>
@@ -98,7 +98,7 @@ const ChatMessageContentViewImpl = React.memo(
                   }}
                 >
                   <Box
-                    component="code"
+                    component="div"
                     sx={{ whiteSpace: 'pre !important' }}
                     className={`hljs language-${highlight.language}`}
                   >

@@ -1,6 +1,7 @@
 import {
   Avatar,
   Box,
+  Collapse,
   Input,
   ListItem,
   ListItemAvatar,
@@ -17,6 +18,11 @@ import ChatMessageActionBar, {
 import { useEditable } from '../../hooks/useEditable'
 import { useDoubleConfirm } from '../../hooks/useDoubleConfirm'
 import { models } from '../../backend/service'
+
+function sublines(s: string, line: number) {
+  const parts = s.split('\n', line)
+  return parts.slice(0, -1).join('\n')
+}
 
 export default function ChatMessageItem({
   message,
@@ -51,7 +57,10 @@ export default function ChatMessageItem({
         if (key === 'edit') {
           finishEditing()
         } else if (key === 'delete') {
-          onDeleteMessage(message.id)
+          onDeleteMessage({
+            chatId: message.chat.id,
+            messageId: message.id,
+          })
         }
       },
       onConfirmCanceled(key) {
@@ -68,7 +77,8 @@ export default function ChatMessageItem({
 
   const waitingReceive = message.loadingStatus === 'wait_first'
   const isUser = message.senderType == 'user'
-  const isHide = !!message.hiddenAt
+  const isHide = !!message.ignoreAt
+  const isCollapsed = message.ui.collapsed
   const sender = message.sender
 
   const renderAvatar = () => {
@@ -86,20 +96,27 @@ export default function ChatMessageItem({
   }
 
   const renderContent = () => {
+    // console.log(message.id, { content: message.content })
     // We use display none rather than if to avoid the ui bug
     return (
-      <>
+      <Collapse in={!isCollapsed} timeout="auto">
         <Input
           multiline
           fullWidth
           sx={{
             display: !editing ? 'none' : undefined,
-            color: isUser ? 'primary.contrastText' : 'inherit',
+            // color: isUser ? 'primary.contrastText' : 'inherit',
+            color: 'inherit',
           }}
           value={editFormValue}
           onChange={(e) => onEditFormValueChange(e.target.value)}
           onClick={(e) => {
             e.stopPropagation()
+          }}
+          onKeyDown={(e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+              confirm()
+            }
           }}
         />
         <ChatMessageContentView
@@ -110,7 +127,7 @@ export default function ChatMessageItem({
             height: editing ? '0px' : undefined,
           }}
         />
-      </>
+      </Collapse>
     )
   }
 
@@ -150,13 +167,15 @@ export default function ChatMessageItem({
             sx={{
               padding: '8px 16px',
               paddingBottom: '8px',
-              color: isUser ? 'primary.contrastText' : 'black',
+              // color: isUser ? 'primary.contrastText' : 'black',
               borderRadius: '12px',
-              backgroundColor: isUser ? '#1777ff' : '#ffffff',
-              maxWidth: '500px',
+              // backgroundColor: isUser ? '#1777ff' : '#ffffff',
+              backgroundColor: isUser ? '#95ec69' : '#ffffff',
+              maxWidth: 'calc(min(80vw, 500px))',
               minWidth: '10px',
+              minHeight: '40px',
             }}
-            elevation={1}
+            elevation={isUser ? 0 : 1}
           >
             {waitingReceive ? 'Loading ...' : renderContent()}
           </Paper>

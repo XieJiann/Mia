@@ -31,7 +31,7 @@ export const schema = appSchema({
       columns: [
         { name: 'chat_id', type: 'string', isIndexed: true },
         { name: 'content', type: 'string' },
-        { name: 'role', type: 'string' },
+        { name: 'ui', type: 'string' },
         {
           name: 'sender_id',
           type: 'string',
@@ -40,12 +40,11 @@ export const schema = appSchema({
           name: 'sender_type',
           type: 'string',
         },
-        { name: 'actions_hidden', type: 'boolean' },
         { name: 'loading_status', type: 'string' },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
         { name: 'deleted_at', type: 'number', isOptional: true },
-        { name: 'hidden_at', type: 'number', isOptional: true },
+        { name: 'ignore_at', type: 'number', isOptional: true },
       ],
     }),
     tableSchema({
@@ -130,10 +129,10 @@ export type ChatTokenUsage = {
 
 function sanitizeChatTokenUsage(data: object = {}): ChatTokenUsage {
   return {
-    ...data,
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
+    ...data,
   }
 }
 
@@ -141,6 +140,18 @@ export type BotTemplateParams = Record<string, unknown>
 
 function sanitizeBotTemplateParams(data: object = {}): BotTemplateParams {
   return data as BotTemplateParams
+}
+
+// Ui state for ChatMessage
+export type ChatMessageUI = {
+  collapsed: boolean
+}
+
+function sanitizeChatMessageUI(data: object = {}): ChatMessageUI {
+  return {
+    collapsed: false,
+    ...data,
+  }
 }
 
 export class UserModel extends Model {
@@ -187,7 +198,7 @@ export class ChatModel extends Model {
   @children('chat_messages') messages!: Query<ChatMessageModel>
 
   // @lazy validMessages = this.messages.extend(
-  //   Q.where('hidden_at', Q.notEq(null)),
+  //   Q.where('ignore_at', Q.notEq(null)),
   //   Q.where('deleted_at', Q.notEq(null))
   // )
 
@@ -224,9 +235,10 @@ export class ChatMessageModel extends Model {
 
   @immutableRelation('chats', 'chat_id') chat!: Relation<ChatModel>
 
-  @text('content') content!: string
-  @field('role') role!: 'system' | 'user' | 'assistant'
-  @field('actions_hidden') actionsHidden!: boolean
+  @json('ui', sanitizeChatMessageUI) ui!: ChatMessageUI
+
+  // NOTE: we should not use @text on content, as it will trim whitespace from the content
+  @field('content') content!: string
   @field('loading_status') loadingStatus!:
     | 'wait_first'
     | 'loading'
@@ -244,8 +256,8 @@ export class ChatMessageModel extends Model {
   @date('updated_at')
   updatedAt!: Date
 
-  @date('hidden_at')
-  hiddenAt?: Date
+  @date('ignore_at')
+  ignoreAt?: Date
 
   @date('deleted_at')
   deletedAt?: Date
@@ -254,17 +266,16 @@ export class ChatMessageModel extends Model {
     return {
       id: this.id,
       content: this.content,
+      ui: this.ui,
       chat: {
         id: this.chat.id as string,
       },
       senderId: this.senderId as string,
       senderType: this.senderType,
-      role: this.role,
-      actionsHidden: this.actionsHidden,
       loadingStatus: this.loadingStatus,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
-      hiddenAt: this.hiddenAt,
+      ignoreAt: this.ignoreAt,
       deletedAt: this.deletedAt,
     }
   }
