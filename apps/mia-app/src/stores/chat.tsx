@@ -11,6 +11,7 @@ import {
   createDefaultListPage,
   ListFiltersFromString,
   GetLoading,
+  MiaService,
 } from '../backend/service'
 import { Result } from '../types'
 
@@ -47,6 +48,10 @@ export type ChatStore = {
   updateChat(id: string, p: { name?: string }): Promise<void>
 
   deleteChat(id: string): Promise<void>
+
+  updateMessage: MiaService['updateMessage']
+
+  deleteMessage: MiaService['deleteMessage']
 
   stopGenerateMessage(p: { messageId: string }): Promise<void>
 
@@ -163,9 +168,19 @@ function createChatStore() {
         handleRefreshChat(id)
       },
 
+      async updateMessage(id, p) {
+        await miaService.updateMessage(id, p)
+        await handleRefreshMessage(id)
+      },
+
+      async deleteMessage(id) {
+        await miaService.deleteMessage(id)
+        await handleRefreshMessage(id)
+      },
+
       async stopGenerateMessage(p) {
         await miaService.stopGenerateMessage(p)
-        handleRefreshMessage(p.messageId)
+        await handleRefreshMessage(p.messageId)
       },
 
       async sendNewMessageStream(p: {

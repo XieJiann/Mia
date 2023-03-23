@@ -236,14 +236,13 @@ export class MiaService {
 
     const chat = chatRes.value
     const messages = await chat.messages
-      .extend(Q.sortBy('created_at', 'asc'))
+      .extend(Q.where('deleted_at', null), Q.sortBy('created_at', 'asc'))
       .fetch()
 
     // TODO: optimize sender fetch logic, handle error
     const messageWithSenders: models.ChatMessage[] = await Promise.all(
       messages.map(async (m) => {
         const sender = await this.getMessageSenderById(m.senderType, m.senderId)
-        console.log(m, sender)
         return {
           ...m.getRawObject(),
           sender: sender.value,
@@ -313,6 +312,38 @@ export class MiaService {
   }
 
   // messages
+
+  async updateMessage(
+    id: string,
+    p: { content?: string; toggleHide?: boolean }
+  ): Promise<void> {
+    await database.write(async () => {
+      const message = await this.messageTable.find(id)
+      return await message.update((b) => {
+        if (p.content != null) {
+          b.content = p.content
+        }
+
+        if (p.toggleHide) {
+          if (b.hiddenAt) {
+            b.hiddenAt = undefined
+          } else {
+            b.hiddenAt = new Date()
+          }
+        }
+      })
+    })
+  }
+
+  async deleteMessage(id: string) {
+    await database.write(async () => {
+      const message = await this.messageTable.find(id)
+      return await message.update((b) => {
+        b.deletedAt = new Date()
+      })
+    })
+  }
+
   async getMessageById(id: string): Promise<models.ChatMessage> {
     const message = await this.messageTable.find(id)
     const sender = await this.getMessageSenderById(
@@ -457,6 +488,7 @@ export class MiaService {
         m.senderId = '_user'
         m.role = 'user'
         m.content = p.content
+        m.loadingStatus = 'ok'
       })
 
       // sleep 2ms to use different timestamp

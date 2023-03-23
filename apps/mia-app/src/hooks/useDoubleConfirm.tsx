@@ -9,6 +9,7 @@ import { useRef, useState } from 'react'
 export function useDoubleConfirm<Keys extends string | number>(opts: {
   onConfirm: (key: Keys) => void
   onConfirmCanceled: (key: Keys) => void
+  onConfirming?: (key: Keys) => void
 }) {
   const [confirming, setConfirming] = useState<boolean>(false)
   const confirmingKeyRef = useRef<Keys | null>()
@@ -16,6 +17,7 @@ export function useDoubleConfirm<Keys extends string | number>(opts: {
   const startConfirming = useMemoizedFn((key: Keys) => {
     setConfirming(true)
     confirmingKeyRef.current = key
+    opts.onConfirming && opts.onConfirming(key)
   })
 
   const confirm = useMemoizedFn(() => {
@@ -29,6 +31,11 @@ export function useDoubleConfirm<Keys extends string | number>(opts: {
 
   const cancelConfirm = useMemoizedFn(() => {
     setConfirming(false)
+    const key = confirmingKeyRef.current
+    if (key == null) {
+      return
+    }
+    opts.onConfirmCanceled(key)
     confirmingKeyRef.current = null
   })
 

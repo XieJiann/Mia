@@ -11,9 +11,9 @@ import {
 import { useMemoizedFn } from 'ahooks'
 import { useSnackbar } from 'notistack'
 import { useState } from 'react'
-import { useIsMobile } from '../hooks'
-import { Result } from '../types'
-import { formatErrorUserFriendly } from '../utils'
+import { useIsMobile } from '../../hooks'
+import { Result } from '../../types'
+import { formatErrorUserFriendly } from '../../utils'
 
 export interface ChatInputBarProps {
   onSendMessage(p: { content: string }): Promise<Result<boolean>>

@@ -1,10 +1,10 @@
 import { Box } from '@mui/material'
 import { useMemoizedFn } from 'ahooks'
-import * as chat_t from '../stores/chat'
-import { useChatStore } from '../stores/chat'
-import { shallow } from '../stores'
+import * as chat_t from '../../stores/chat'
+import { useChatStore } from '../../stores/chat'
+import { shallow } from '../../stores'
 import { useSnackbar } from 'notistack'
-import { formatErrorUserFriendly } from '../utils'
+import { formatErrorUserFriendly } from '../../utils'
 import ChatInputBar from './ChatInputBar'
 
 import { useMemo } from 'react'
@@ -13,15 +13,10 @@ import ChatMessageList from './ChatMessageList'
 export function ChatPanel(props: { chat: chat_t.Chat }) {
   const { chat } = props
 
-  const [sendChatMessageStream, regenerateMessageStream, stopGenerateMessage] =
-    useChatStore(
-      (s) => [
-        s.sendNewMessageStream,
-        s.regenerateMessageStream,
-        s.stopGenerateMessage,
-      ],
-      shallow
-    )
+  const [sendChatMessageStream, regenerateMessageStream] = useChatStore(
+    (s) => [s.sendNewMessageStream, s.regenerateMessageStream],
+    shallow
+  )
 
   const { enqueueSnackbar } = useSnackbar()
 
@@ -80,7 +75,6 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
         <ChatMessageList
           messages={chatMessages}
           onRegenerateMessage={handleRegenerateMessage}
-          onStopGenerateMessage={stopGenerateMessage}
         />
       </Box>
 

@@ -59,7 +59,7 @@ export default function BaseAppBar({ title }: { title?: string }) {
           <MenuIcon />
         </IconButton>
       </Toolbar>
-      <Typography variant="h6" sx={{ flexGrow: 1 }}>
+      <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
         {title || 'Mia'}
       </Typography>
       <Toolbar>

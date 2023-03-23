@@ -1,6 +1,6 @@
 import { Box } from '@mui/material'
 
-import { ChatPanel } from '../components/ChatPanel'
+import { ChatPanel } from '../components/chat/ChatPanel'
 import { Chat, useChatStore } from '../stores/chat'
 import BaseAppBar from '../components/BaseAppBar'
 import { Navigate, useParams } from 'react-router-dom'

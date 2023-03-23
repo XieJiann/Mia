@@ -44,7 +44,7 @@ function Main({
 export default function RootPage() {
   const isMobile = useIsMobile()
 
-  const drawerWidth = isMobile ? 280 : 360
+  const drawerWidth = isMobile ? 300 : 360
 
   return (
     <Box

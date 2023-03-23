@@ -1,22 +1,27 @@
 import { Box, List } from '@mui/material'
 import { useRef } from 'react'
 import { Virtuoso, VirtuosoProps } from 'react-virtuoso'
-import * as chat_t from '../stores/chat'
+import * as chat_t from '../../stores/chat'
+import { shallow } from '../../stores'
 import ChatMessageItem from './ChatMessageItem'
 
 export interface ChatMessageListProps {
   messages: chat_t.ChatMessage[]
-  onRegenerateMessage: (p: { messageId: string }) => void
-  onStopGenerateMessage: (p: { messageId: string }) => void
+  onRegenerateMessage: (p: { messageId: string }) => Promise<void>
 }
 export default function ChatMessageList({
   messages,
   onRegenerateMessage,
-  onStopGenerateMessage,
 }: ChatMessageListProps) {
   // TODO: impl to bottom button, see https://virtuoso.dev/stick-to-bottom/
   // We use followOutput=auto to scroll to bottom when totalCount changes
   const virtuosoRef = useRef(null)
+
+  const [stopGenerateMessage, updateMessage, deleteMessage] =
+    chat_t.useChatStore(
+      (s) => [s.stopGenerateMessage, s.updateMessage, s.deleteMessage],
+      shallow
+    )
 
   return (
     <Virtuoso
@@ -37,8 +42,10 @@ export default function ChatMessageList({
               onRegenerateMessage({ messageId: message.id })
             }}
             onStopGenerate={() => {
-              onStopGenerateMessage({ messageId: message.id })
+              stopGenerateMessage({ messageId: message.id })
             }}
+            onUpdateMessage={updateMessage}
+            onDeleteMessage={deleteMessage}
           />
         )
       }}

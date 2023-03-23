@@ -21,17 +21,18 @@ import { useNavigate } from 'react-router-dom'
 import { useCurrentChatId } from '../hooks'
 import { shallow } from '../stores'
 import { useChatStore } from '../stores/chat'
+import ChatListItem from './chat/ChatListItem'
 
 export function DrawerChatList() {
-  const [createChat, deleteChat] = useChatStore(
-    (s) => [s.createChat, s.deleteChat],
+  const [createChat, deleteChat, updateChat] = useChatStore(
+    (s) => [s.createChat, s.deleteChat, s.updateChat],
     shallow
   )
 
   const currentChatId = useCurrentChatId()
   const navigate = useNavigate()
   const sortedChats = useChatStore((s) =>
-    s.listChats({ orderBy: 'updated_at' })
+    s.listChats({ orderBy: 'updated_at', order: 'desc' })
   )
 
   const handleCreateChat = useMemoizedFn(async () => {
@@ -68,28 +69,14 @@ export function DrawerChatList() {
         }}
       >
         {sortedChats.data.map((chat) => (
-          <ListItem
+          <ChatListItem
             key={chat.id}
-            secondaryAction={
-              <IconButton
-                edge="end"
-                aria-label="delete"
-                onClick={() => deleteChat(chat.id)}
-              >
-                <DeleteIcon />
-              </IconButton>
-            }
-          >
-            <ListItemButton
-              onClick={() => handleSelectChat(chat.id)}
-              selected={chat.id == currentChatId}
-            >
-              <ListItemIcon>
-                <ChatIcon />
-              </ListItemIcon>
-              <ListItemText primary={chat.name} />
-            </ListItemButton>
-          </ListItem>
+            chat={chat}
+            onSelectChat={handleSelectChat}
+            onDeleteChat={deleteChat}
+            onUpdateChat={updateChat}
+            selected={currentChatId === chat.id}
+          />
         ))}
       </List>
     </Box>
