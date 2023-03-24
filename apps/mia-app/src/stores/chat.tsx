@@ -60,6 +60,8 @@ export type ChatStore = {
     content: string
   }): Promise<Result<boolean>>
 
+  autoReplyMessage(p: { chatId: string }): Promise<Result<boolean>>
+
   regenerateMessage(p: {
     messageId: string
     chatId: string
@@ -194,6 +196,19 @@ function createChatStore() {
           },
           onMessageUpdated(messageId) {
             handleRefreshMessage(messageId)
+          },
+        })
+        return resp
+      },
+
+      async autoReplyMessage(p) {
+        const resp = await miaService.autoReplyMessage({
+          ...p,
+          onMessageUpdated(messageId) {
+            handleRefreshMessage(messageId)
+          },
+          onChatUpdated(chatId) {
+            handleRefreshChat(chatId)
           },
         })
         return resp

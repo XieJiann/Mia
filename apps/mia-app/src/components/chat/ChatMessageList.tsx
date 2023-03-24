@@ -98,7 +98,7 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
     <Virtuoso
       ref={virtuosoRef}
       style={{
-        height: 'calc(100vh - 80px)',
+        height: 'calc(100vh - 100px)',
       }}
       components={VirtuosoComponents}
       followOutput={'auto'}

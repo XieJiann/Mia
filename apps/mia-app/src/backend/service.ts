@@ -799,6 +799,34 @@ export class MiaService {
     return resp
   }
 
+  async autoReplyMessage(
+    p: { chatId: string } & MessageStreamCallbacks
+  ): Promise<Result<boolean>> {
+    const chat = await this.chatTable.find(p.chatId)
+    if (!chat) {
+      return { ok: false, error: new Error('Chat not found') }
+    }
+
+    const { replyMsg } = await database.write(async () => {
+      const replyMsg = await this.messageTable.create((m) => {
+        m.chat.id = chat.id
+        m.senderType = 'bot'
+        m.senderId = '_nop'
+        m.content = ''
+        m.loadingStatus = 'wait_first'
+      })
+      return { replyMsg }
+    })
+
+    p.onChatUpdated(chat.id)
+
+    return this._regenerateBotMessage({
+      chat,
+      replyMessage: replyMsg,
+      ...p,
+    })
+  }
+
   async sendNewMessage(
     p: {
       chatId: string

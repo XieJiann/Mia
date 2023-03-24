@@ -10,7 +10,10 @@ import { IStreamHandler } from '../../types'
 import { extractBotNamePrefix } from '../../utils'
 import { models } from '../service'
 
-function convertToOpenAIMessage(message: models.ChatMessage): {
+function convertToOpenAIMessage(message: {
+  content: string
+  senderType: models.ChatMessage['senderType']
+}): {
   content: string
   role: api_t.ChatCompletionMessage['role']
 } {
@@ -48,7 +51,17 @@ export class OpenaiChatBot implements IBotService {
       throw new Error('No messages')
     }
 
-    const chatMessages = p.messages.map(convertToOpenAIMessage)
+    const chatMessages = p.messages
+      .map((v) => {
+        if (v.senderType === 'bot') {
+          return {
+            senderType: v.senderType,
+            content: `(By: @${v.senderId}) ${v.content}`,
+          }
+        }
+        return v
+      })
+      .map(convertToOpenAIMessage)
 
     const prevMessages = chatMessages.slice(0, -2)
     const lastMessage = chatMessages[p.messages.length - 1]
@@ -57,7 +70,7 @@ export class OpenaiChatBot implements IBotService {
       ...prevMessages,
       {
         role: 'system',
-        content: `Remeber you'are not an AI Model, and your id is @${this.params.botName}. This is your settings: ${initialPrompts}`,
+        content: `${initialPrompts}`,
       },
       lastMessage,
     ]

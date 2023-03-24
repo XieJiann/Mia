@@ -1,4 +1,10 @@
-import { Send, SendOutlined } from '@mui/icons-material'
+import {
+  AutoAwesome,
+  Autorenew,
+  Reply,
+  Send,
+  SendOutlined,
+} from '@mui/icons-material'
 import {
   Box,
   Paper,
@@ -7,28 +13,35 @@ import {
   Button,
   Tooltip,
   Fab,
+  Stack,
 } from '@mui/material'
 import { useMemoizedFn } from 'ahooks'
 import { useSnackbar } from 'notistack'
 import { useState } from 'react'
 import { useIsMobile } from '../../hooks'
+import { shallow, useChatStore } from '../../stores'
 import { Result } from '../../types'
 import { formatErrorUserFriendly } from '../../utils'
 
 export interface ChatInputBarProps {
-  onSendMessage(p: { content: string }): Promise<Result<boolean>>
+  chatId: string
 }
 
 export function ChatInputBarMobile({}: ChatInputBarProps) {
   return <Box></Box>
 }
 
-export function ChatInputBarDesktop({ onSendMessage }: ChatInputBarProps) {
+export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
   const [text, setText] = useState('')
 
   const { enqueueSnackbar } = useSnackbar()
 
   const isMobile = useIsMobile()
+
+  const [autoReplyMessage, sendNewMessage] = useChatStore(
+    (s) => [s.autoReplyMessage, s.sendNewMessage],
+    shallow
+  )
 
   const handleSendMessage = useMemoizedFn(async () => {
     const content = text.trim()
@@ -38,7 +51,8 @@ export function ChatInputBarDesktop({ onSendMessage }: ChatInputBarProps) {
 
     setText('')
 
-    const res = await onSendMessage({
+    const res = await sendNewMessage({
+      chatId,
       content: content,
     })
 
@@ -65,11 +79,28 @@ export function ChatInputBarDesktop({ onSendMessage }: ChatInputBarProps) {
   return (
     <Box
       sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: '4px',
         px: isMobile ? '8px' : '12px',
         mb: isMobile ? '8px' : '24px',
         width: '100%',
       }}
     >
+      <Stack direction="row" aria-label="input-bar-actions" px={1}>
+        <Tooltip title="Auto Reply">
+          <IconButton
+            size="medium"
+            color="primary"
+            onClick={() => {
+              autoReplyMessage({ chatId: chatId })
+            }}
+          >
+            <AutoAwesome fontSize="inherit" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
       <Paper
         component="form"
         sx={{

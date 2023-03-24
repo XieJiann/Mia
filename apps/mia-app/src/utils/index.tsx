@@ -29,12 +29,7 @@ export function formatErrorUserFriendly(error: unknown) {
   return `${error}`
 }
 
-// Extract botname prefix, like `@chatgpt hello, world` -> {name: chatgpt, content: '@chatgpt ...', trimedContent: 'hello, world'}
-export function extractBotNamePrefix(content: string): {
-  name: string
-  content: string
-  trimedContent: string
-} {
+export function extractBotNamePrefixExplict(content: string) {
   const botNamePattern = /^@([-_.$0-9a-zA-Z]+)/
 
   const trimed = content.trimStart()
@@ -45,6 +40,36 @@ export function extractBotNamePrefix(content: string): {
       name: match[1],
       content,
       trimedContent: trimed.slice(match[0].length),
+    }
+  }
+
+  return {
+    name: '',
+    content,
+    trimedContent: content,
+  }
+}
+
+// Extract botname prefix, like `@chatgpt hello, world` -> {name: chatgpt, content: '@chatgpt ...', trimedContent: 'hello, world'}
+export function extractBotNamePrefix(content: string): {
+  name: string
+  content: string
+  trimedContent: string
+} {
+  // try first
+  const res1 = extractBotNamePrefixExplict(content)
+
+  if (res1.name) {
+    return res1
+  }
+
+  // try second sentence
+  const sentences = content.split(/[.!?:\u3002\uFF01\uff1a]/, 2)
+  console.log(`sentences`, sentences)
+  if (sentences.length >= 2) {
+    const res2 = extractBotNamePrefixExplict(sentences[1])
+    if (res2.name) {
+      return res2
     }
   }
 
