@@ -8,6 +8,8 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 
+import PreviewImage from '../PreviewImage'
+
 // Source is from https://github.com/ztjhz/ChatGPTFreeApp/blob/HEAD/src/components/Chat/ChatContent/Message/MessageContent.tsx
 const ChatMessageContentViewImpl = React.memo(
   ({ content }: { content: string }) => {
@@ -17,12 +19,11 @@ const ChatMessageContentViewImpl = React.memo(
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[[rehypeKatex, { output: 'mathml' }]]}
         components={{
-          img({ node, ...props }) {
+          img({ node, src, ...props }) {
             return (
-              <img
-                {...props}
+              <PreviewImage
+                src={src}
                 style={{
-                  objectFit: 'cover',
                   maxWidth: '100%',
                   maxHeight: '200px',
                 }}
@@ -115,7 +116,7 @@ const ChatMessageContentViewImpl = React.memo(
             )
           },
           p({ className, children, ...props }) {
-            return <p className="whitespace-pre-wrap">{children}</p>
+            return <div className="whitespace-pre-wrap">{children}</div>
           },
         }}
       >

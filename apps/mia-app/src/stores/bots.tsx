@@ -10,7 +10,9 @@ import {
   miaService,
   ListFiltersFromString,
   MiaService,
+  GetLoading,
 } from '../backend/service'
+import { Result } from '../types'
 
 interface BotStore {
   botListView: {
@@ -21,9 +23,15 @@ interface BotStore {
     [key: string]: ListPage<BotTemplate>
   }
 
+  bots: {
+    [key: string]: Result<Bot>
+  }
+
+  getBot(id: string): GetLoading<Bot>
   listBots: (filters: ListFilters) => ListPage<BotMeta>
   listBotTemplates: (filters: ListFilters) => ListPage<BotTemplate>
   createBot: MiaService['createBot']
+  updateBot: MiaService['updateBot']
 }
 
 function createBotStore() {
@@ -41,10 +49,27 @@ function createBotStore() {
       }
     }
 
+    const refreshBot = async (id: string) => {
+      // push async
+      const res = await miaService.getBotById(id)
+      set((s) => {
+        s.bots[id] = res
+      })
+    }
+
     return {
       botListView: {},
       botTemplateListView: {},
+      bots: {},
 
+      getBot(id) {
+        const botRes = get().bots[id]
+        if (!botRes) {
+          refreshBot(id)
+          return { loading: true, value: undefined }
+        }
+        return { loading: false, value: botRes.value, error: botRes.error }
+      },
       listBots(filters) {
         const key = ListFiltersToString(filters)
         const view = get().botListView[key]
@@ -93,6 +118,12 @@ function createBotStore() {
         const bot = await miaService.createBot(p)
         refetchAllViews()
         return bot
+      },
+
+      async updateBot(id, p) {
+        const res = await miaService.updateBot(id, p)
+        refreshBot(id)
+        return res
       },
     }
   })

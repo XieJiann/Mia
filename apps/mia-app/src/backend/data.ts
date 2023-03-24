@@ -26,7 +26,7 @@ const bots: (Omit<BotMeta, 'createdAt' | 'updatedAt'> & {
     kind: '',
     name: 'dalle',
     displayName: 'Dall-E',
-    avatarUrl: '/avatars/bot_chatgpt.png',
+    avatarUrl: '/avatars/bot_openai_4.png',
     botTemplateId: '_openai-image',
     botTemplateParams: {},
     description: 'default bot for openai-image',

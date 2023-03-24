@@ -55,12 +55,12 @@ export type ChatStore = {
 
   stopGenerateMessage(p: { messageId: string }): Promise<void>
 
-  sendNewMessageStream(p: {
+  sendNewMessage(p: {
     chatId: string
     content: string
   }): Promise<Result<boolean>>
 
-  regenerateMessageStream(p: {
+  regenerateMessage(p: {
     messageId: string
     chatId: string
   }): Promise<Result<boolean>>
@@ -183,7 +183,7 @@ function createChatStore() {
         await handleRefreshMessage(p.messageId)
       },
 
-      async sendNewMessageStream(p: {
+      async sendNewMessage(p: {
         chatId: string
         content: string
       }): Promise<Result<boolean>> {
@@ -199,7 +199,7 @@ function createChatStore() {
         return resp
       },
 
-      async regenerateMessageStream(p) {
+      async regenerateMessage(p) {
         // more fine-grained refresh
         const resp = await miaService.regenerateMessage({
           ...p,

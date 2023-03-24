@@ -1,17 +1,22 @@
 import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import { IconButton, IconButtonProps, styled } from '@mui/material'
+import React from 'react'
 
 export interface CollapseButtonProps extends IconButtonProps {
   collapsed: boolean
 }
-const CollpaseButton = styled((props: CollapseButtonProps) => {
-  const { collapsed, ...other } = props
-  return (
-    <IconButton {...other}>
-      <ExpandMoreIcon />
-    </IconButton>
+const CollpaseButton = styled(
+  React.forwardRef<HTMLButtonElement, CollapseButtonProps>(
+    (props: CollapseButtonProps, ref) => {
+      const { collapsed, ...other } = props
+      return (
+        <IconButton {...other} ref={ref}>
+          <ExpandMoreIcon />
+        </IconButton>
+      )
+    }
   )
-})(({ theme, collapsed }) => ({
+)(({ theme, collapsed }) => ({
   transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)',
   marginLeft: 'auto',
   transition: theme.transitions.create('transform', {

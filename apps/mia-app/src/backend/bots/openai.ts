@@ -42,7 +42,25 @@ export class OpenaiChatBot implements IBotService {
     return {}
   }
   sendMessage(p: SendMessageParams): IStreamHandler<MessageReply> {
-    const apiMessages = p.messages.map(convertToOpenAIMessage)
+    const { initialPrompts = '' } = this.params.templateParams
+
+    if (p.messages.length === 0) {
+      throw new Error('No messages')
+    }
+
+    const chatMessages = p.messages.map(convertToOpenAIMessage)
+
+    const prevMessages = chatMessages.slice(0, -2)
+    const lastMessage = chatMessages[p.messages.length - 1]
+
+    const apiMessages: api_t.ChatCompletionMessage[] = [
+      ...prevMessages,
+      {
+        role: 'user',
+        content: `Remeber you'are not an AI Model, and your id is @${this.params.botName}. This is your settings: ${initialPrompts}`,
+      },
+      lastMessage,
+    ]
 
     const streamHandler = this.openaiClient.createChatCompletionsStream({
       model: 'gpt-3.5-turbo',
@@ -86,6 +104,7 @@ export class OpenaiImageBot implements IBotService {
     const streamHandler = this.openaiClient.generateImages({
       prompt: trimedContent,
       response_format: 'url',
+      size: '256x256',
     })
 
     return streamHandler.map((reply) => {

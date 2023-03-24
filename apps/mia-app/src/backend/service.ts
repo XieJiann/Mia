@@ -80,6 +80,7 @@ export type ListPage<T> = {
 import type { Character, Chat, ChatMessageMeta, ChatMeta } from './models'
 import { IBotService, MessageReply } from './bots'
 import { extractBotNamePrefix } from '../utils'
+import { createBotService } from './bots/factory'
 export type { Character, Chat, ChatMessageMeta as ChatMessage, ChatMeta }
 
 interface MessageStreamCallbacks {
@@ -141,12 +142,7 @@ class MiaServiceState {
   }
 
   async refreshBotByName(botName: string): Promise<void> {
-    const botRes = await this.miaService.getBotByName(botName)
-    if (!botRes.ok) {
-      return
-    }
-
-    this.botNameCache.set(botName, botRes.value)
+    this.botNameCache.delete(botName)
   }
 }
 
@@ -224,6 +220,32 @@ export class MiaService {
 
   // Bots
 
+  async checkBotNameValid(p: {
+    name: string
+    curId?: string
+  }): Promise<Result<boolean>> {
+    const quries: Q.Clause[] = [
+      Q.where('name', p.name),
+      Q.where('deleted_at', null),
+    ]
+
+    if (p.curId) {
+      quries.push(Q.where('id', Q.notEq(p.curId)))
+    }
+
+    const count = await this.botTable.query(...quries).fetchCount()
+    if (count !== 0) {
+      return {
+        ok: false,
+        error: new Error('Bot name is already taken'),
+      }
+    }
+    return {
+      ok: true,
+      value: true,
+    }
+  }
+
   async listBots(filters: ListFilters): Promise<ListPage<models.BotMeta>> {
     const queryFilters: Q.Clause[] = [Q.where('deleted_at', null)]
 
@@ -251,6 +273,7 @@ export class MiaService {
   async createBot(p: {
     name: string
     displayName?: string
+    description?: string
     avatarUrl?: string
     botTemplateId: string
     botTemplateParams: models.BotTemplateParams
@@ -270,6 +293,7 @@ export class MiaService {
       const bot = await this.botTable.create((c) => {
         c.name = p.name
         c.displayName = p.displayName || p.name
+        c.description = p.description || ''
         c.avatarUrl = p.avatarUrl || ''
         c.botTemplate.id = p.botTemplateId
         c.botTemplateParams = p.botTemplateParams
@@ -280,6 +304,69 @@ export class MiaService {
         value: bot,
       }
     })
+  }
+
+  async updateBot(
+    botId: string,
+    p: {
+      name?: string
+      displayName?: string
+      description?: string
+      avatarUrl?: string
+      botTemplateParams?: models.BotTemplateParams
+    }
+  ): Promise<Result<boolean>> {
+    if (Constants.PredefinedBotIds.has(botId)) {
+      return { ok: false, error: new Error('Cannot update predefined bot') }
+    }
+
+    const res = await database.write(async () => {
+      const botRes = await getByIdFromTable(this.botTable, botId)
+      if (!botRes.ok) {
+        return botRes
+      }
+      const bot = botRes.value
+      this.state.refreshBotByName(bot.name)
+
+      if (p.name) {
+        const nameRes = await this.checkBotNameValid({
+          name: p.name,
+          curId: botId,
+        })
+        if (!nameRes.ok) {
+          return nameRes
+        }
+      }
+
+      bot.update((b) => {
+        if (p.name) {
+          b.name = p.name
+        }
+        if (p.displayName) {
+          b.displayName = p.displayName
+        }
+        if (p.avatarUrl) {
+          b.avatarUrl = p.avatarUrl
+        }
+        if (p.description) {
+          b.description = p.description
+        }
+        if (p.botTemplateParams) {
+          b.botTemplateParams = p.botTemplateParams
+        }
+      })
+
+      return {
+        ok: true,
+        value: true,
+      } as Result<boolean>
+    })
+
+    if (p.name) {
+      this.state.refreshBotByName(p.name)
+    }
+
+    return res
   }
 
   async getBotById(id: string): Promise<Result<models.Bot>> {
@@ -302,7 +389,11 @@ export class MiaService {
   }
 
   async getBotByName(name: string): Promise<Result<models.Bot>> {
-    const botRes = await getOneFromTable(this.botTable, Q.where('name', name))
+    const botRes = await getOneFromTable(
+      this.botTable,
+      Q.where('name', name),
+      Q.where('deleted_at', null)
+    )
     if (!botRes.ok) {
       return botRes
     }
@@ -604,17 +695,14 @@ export class MiaService {
       })
     })
 
-    p.onMessageUpdated(message.id)
-
     const history = await this._queryFilteredHistory(chat)
       .extend(Q.where('created_at', Q.lt(message.createdAt.getTime())))
       .fetch()
-    const toSendMessages = [...history.map((m) => convertToOpenAIMessage(m))]
 
     const resp = await this._handleSendMessage({
       chat,
       replyMessage: message,
-      toSendMessages,
+      toSendMessages: history,
       ...p,
     })
 
@@ -635,8 +723,8 @@ export class MiaService {
     const history = await this._queryFilteredHistory(chat).fetch()
 
     // added message
-    const { replyMsg } = await database.write(async () => {
-      await this.messageTable.create((m) => {
+    const { userMsg, replyMsg } = await database.write(async () => {
+      const userMsg = await this.messageTable.create((m) => {
         m.chat.id = chat.id
         m.senderType = 'user'
         m.senderId = '_user'
@@ -655,18 +743,12 @@ export class MiaService {
         m.loadingStatus = 'wait_first'
       })
 
-      return { replyMsg }
+      return { userMsg, replyMsg }
     })
 
     p.onChatUpdated(chat.id)
 
-    const toSendMessages: api_t.ChatCompletionMessage[] = [
-      ...history.map((m) => convertToOpenAIMessage(m)),
-      {
-        role: 'user',
-        content: p.content,
-      },
-    ]
+    const toSendMessages = [...history, userMsg]
 
     return this._handleSendMessage({
       chat,
@@ -680,7 +762,7 @@ export class MiaService {
     p: {
       chat: models.ChatModel
       replyMessage: models.ChatMessageModel
-      toSendMessages: api_t.ChatCompletionMessage[]
+      toSendMessages: models.ChatMessage[]
     } & MessageStreamCallbacks
   ): Promise<Result<boolean>> {
     if (p.toSendMessages.length === 0) {
@@ -688,7 +770,7 @@ export class MiaService {
     }
 
     const lastMessage = p.toSendMessages[p.toSendMessages.length - 1]
-    if (lastMessage.role !== 'user') {
+    if (lastMessage.senderType !== 'user') {
       return {
         ok: false,
         error: new Error(`last message is not sent by user`),
@@ -713,36 +795,48 @@ export class MiaService {
     }
 
     const bot = botRes.value
+    const botServiceRes = createBotService({
+      bot,
+      openaiClient: this.openaiClient,
+    })
+    if (!botServiceRes.ok) {
+      return botServiceRes
+    }
+    const botService = botServiceRes.value
 
-    const handleStream = async (
-      events: api_t.CreateChatCompletionsReplyEventData[]
-    ) => {
-      let newContent = ''
-      for (const event of events) {
-        let eventContent = event.choices[0].delta.content
-        if (eventContent != null) {
-          newContent += eventContent
-        }
-      }
+    // update sender type
+    await database.write(async () => {
+      await p.replyMessage.update((m) => {
+        m.senderId = bot.id
+        m.senderType = 'bot'
+      })
+    })
 
+    p.onMessageUpdated(p.replyMessage.id)
+
+    const streamHandler = botService.sendMessage({
+      messages: p.toSendMessages,
+    })
+
+    streamHandler.onData(async (r) => {
       await database.write(async () => {
         await p.replyMessage.update((m) => {
           if (m.loadingStatus === 'wait_first') {
             m.loadingStatus = 'loading'
           }
-          m.content = m.content + newContent
+
+          if (r.kind === 'text') {
+            m.content = m.content + r.value
+          }
+
+          if (r.kind === 'image_url') {
+            m.content = m.content + `![image](${r.value})`
+          }
         })
       })
 
       p.onMessageUpdated(p.replyMessage.id)
-    }
-
-    const streamHandler = this.openaiClient.createChatCompletionsStream({
-      model: 'gpt-3.5-turbo',
-      messages: p.toSendMessages,
     })
-
-    streamHandler.onData(handleStream)
 
     const resp = await streamHandler.wait()
 

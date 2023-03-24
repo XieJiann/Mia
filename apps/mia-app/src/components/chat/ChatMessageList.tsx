@@ -4,7 +4,9 @@ import { Virtuoso, VirtuosoHandle, VirtuosoProps } from 'react-virtuoso'
 import * as chat_t from '../../stores/chat'
 import { shallow } from '../../stores'
 import ChatMessageItem from './ChatMessageItem'
-import { useThrottleFn } from 'ahooks'
+import { useMemoizedFn, useThrottleFn } from 'ahooks'
+import { useSnackbar } from 'notistack'
+import { formatErrorUserFriendly } from '../../utils'
 
 // Component use to observe height changes
 function ObserveHeight({
@@ -45,27 +47,52 @@ function ObserveHeight({
 
 export interface ChatMessageListProps {
   messages: chat_t.ChatMessage[]
-  onRegenerateMessage: (p: { messageId: string }) => Promise<void>
 }
-export default function ChatMessageList({
-  messages,
-  onRegenerateMessage,
-}: ChatMessageListProps) {
+export default function ChatMessageList({ messages }: ChatMessageListProps) {
   // TODO: impl to bottom button, see https://virtuoso.dev/stick-to-bottom/
   // We use followOutput=auto to scroll to bottom when totalCount changes
   const virtuosoRef = useRef<VirtuosoHandle>(null)
 
-  const [stopGenerateMessage, updateMessage, deleteMessage] =
+  const [regenerateMessage, stopGenerateMessage, updateMessage, deleteMessage] =
     chat_t.useChatStore(
-      (s) => [s.stopGenerateMessage, s.updateMessage, s.deleteMessage],
+      (s) => [
+        s.regenerateMessage,
+        s.stopGenerateMessage,
+        s.updateMessage,
+        s.deleteMessage,
+      ],
       shallow
     )
+
+  const { enqueueSnackbar } = useSnackbar()
 
   const handleScrollToButtom = () => {
     if (virtuosoRef.current) {
       virtuosoRef.current.scrollToIndex({ index: 'LAST' })
     }
   }
+
+  const handleRegenerateMessage: chat_t.ChatStore['regenerateMessage'] =
+    useMemoizedFn(async (p: { messageId: string; chatId: string }) => {
+      const resp = await regenerateMessage({
+        messageId: p.messageId,
+        chatId: p.chatId,
+      })
+
+      if (!resp.ok) {
+        enqueueSnackbar(formatErrorUserFriendly(resp.error), {
+          autoHideDuration: 3000,
+          variant: 'error',
+          anchorOrigin: {
+            vertical: 'top',
+            horizontal: 'center',
+          },
+        })
+        return resp
+      }
+
+      return { ok: true, value: true }
+    })
 
   return (
     <Virtuoso
@@ -78,8 +105,8 @@ export default function ChatMessageList({
       initialTopMostItemIndex={messages.length - 1}
       totalCount={messages.length}
       overscan={{
-        main: 2,
-        reverse: 2,
+        main: 10,
+        reverse: 10,
       }}
       itemContent={(index) => {
         const isLast = index === messages.length - 1
@@ -89,12 +116,8 @@ export default function ChatMessageList({
           <ChatMessageItem
             key={message.id}
             message={message}
-            onRegenerate={() => {
-              onRegenerateMessage({ messageId: message.id })
-            }}
-            onStopGenerate={() => {
-              stopGenerateMessage({ messageId: message.id })
-            }}
+            onRegenerate={handleRegenerateMessage}
+            onStopGenerate={stopGenerateMessage}
             onUpdateMessage={updateMessage}
             onDeleteMessage={deleteMessage}
           />
@@ -103,7 +126,11 @@ export default function ChatMessageList({
         if (isLast) {
           return (
             <ObserveHeight
-              onHeightChanged={(height) => {
+              onHeightChanged={(height, prevHeight) => {
+                // ignore first changes (when component is first mounted)
+                if (prevHeight <= 0) {
+                  return
+                }
                 handleScrollToButtom()
               }}
               throttle={500}

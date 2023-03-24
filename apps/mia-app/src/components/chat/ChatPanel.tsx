@@ -13,40 +13,15 @@ import ChatMessageList from './ChatMessageList'
 export function ChatPanel(props: { chat: chat_t.Chat }) {
   const { chat } = props
 
-  const [sendChatMessageStream, regenerateMessageStream] = useChatStore(
-    (s) => [s.sendNewMessageStream, s.regenerateMessageStream],
-    shallow
-  )
-
-  const { enqueueSnackbar } = useSnackbar()
+  const [sendChatMessage] = useChatStore((s) => [s.sendNewMessage], shallow)
 
   const handleSendMessage = useMemoizedFn(async (p: { content: string }) => {
-    const res = await sendChatMessageStream({
+    const res = await sendChatMessage({
       chatId: chat.id,
       ...p,
     })
     return res
   })
-
-  const handleRegenerateMessage = useMemoizedFn(
-    async (p: { messageId: string }) => {
-      const resp = await regenerateMessageStream({
-        chatId: chat.id,
-        messageId: p.messageId,
-      })
-
-      if (!resp.ok) {
-        enqueueSnackbar(formatErrorUserFriendly(resp.error), {
-          autoHideDuration: 3000,
-          variant: 'error',
-          anchorOrigin: {
-            vertical: 'top',
-            horizontal: 'center',
-          },
-        })
-      }
-    }
-  )
 
   const chatMessages = useMemo(() => chat.messages, [chat.messages])
 
@@ -71,7 +46,6 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
       >
         <ChatMessageList
           messages={chatMessages}
-          onRegenerateMessage={handleRegenerateMessage}
         />
       </Box>
 

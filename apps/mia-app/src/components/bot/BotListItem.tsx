@@ -35,7 +35,12 @@ export default function BotListItem({ bot }: BotListItemProps) {
         >
           @{bot.name}
         </Typography>
-        <Divider variant="fullWidth" orientation="vertical" flexItem />
+        <Divider
+          component="span"
+          variant="fullWidth"
+          orientation="vertical"
+          flexItem
+        />
         <Typography
           component="span"
           variant="body2"
@@ -55,7 +60,7 @@ export default function BotListItem({ bot }: BotListItemProps) {
         <ListItemText
           primary={bot.displayName}
           secondary={renderSecondaryText()}
-          secondaryTypographyProps={{ color: 'GrayText' }}
+          secondaryTypographyProps={{ color: 'GrayText', component: 'div' }}
         />
       </ListItemButton>
     </ListItem>

@@ -19,8 +19,8 @@ import CollpaseButton from '../forms/CollapseButton'
 export type ConfirmingActionKeys = 'edit' | 'delete'
 export interface ChatMessageActionBarProps {
   message: models.ChatMessage
-  onRegenerate: () => void
-  onStopGenerate: () => void
+  onRegenerate: ChatStore['regenerateMessage']
+  onStopGenerate: ChatStore['stopGenerateMessage']
   onUpdateMessage: ChatStore['updateMessage']
   confirming: boolean
   onStartConfirming: (key: ConfirmingActionKeys) => void
@@ -120,9 +120,9 @@ export default function ChatMessageActionBar({
         <Tooltip title={isIgnored ? 'Unignore' : 'Ignore'}>
           <IconButton size="small" onClick={toggleVisible}>
             {isIgnored ? (
-              <Visibility fontSize="inherit" />
-            ) : (
               <VisibilityOff fontSize="inherit" />
+            ) : (
+              <Visibility fontSize="inherit" />
             )}
           </IconButton>
         </Tooltip>
@@ -152,7 +152,11 @@ export default function ChatMessageActionBar({
     if (isLoading) {
       return (
         <Tooltip title="Stop Generate">
-          <IconButton size="small" color="warning" onClick={onStopGenerate}>
+          <IconButton
+            size="small"
+            color="warning"
+            onClick={() => onStopGenerate({ messageId: message.id })}
+          >
             <CancelOutlined fontSize="inherit" />
           </IconButton>
         </Tooltip>
@@ -161,7 +165,13 @@ export default function ChatMessageActionBar({
 
     return (
       <Tooltip title="Regenerate">
-        <IconButton size="small" onClick={onRegenerate} color="primary">
+        <IconButton
+          size="small"
+          onClick={() =>
+            onRegenerate({ messageId: message.id, chatId: message.chat.id })
+          }
+          color="primary"
+        >
           <RefreshIcon fontSize="inherit" />
         </IconButton>
       </Tooltip>

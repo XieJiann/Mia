@@ -85,6 +85,7 @@ export default function BaseAppBar({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
+        zIndex: '900',
       }}
       color="default"
       elevation={0}
