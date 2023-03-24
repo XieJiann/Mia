@@ -31,9 +31,24 @@ const bots: (Omit<BotMeta, 'createdAt' | 'updatedAt'> & {
     botTemplateParams: {},
     description: 'default bot for openai-image',
   },
+  {
+    id: '_nop',
+    name: 'nop',
+    kind: '',
+    avatarUrl: '',
+    displayName: 'nop',
+    botTemplateId: '_nop',
+    botTemplateParams: {},
+    description: 'nop bot',
+  },
 ]
 
 const botTemplates: Omit<BotTemplate, 'createdAt' | 'updatedAt'>[] = [
+  {
+    id: '_nop',
+    name: 'nop',
+    description: 'Special bot used for represent unset bot',
+  },
   {
     id: '_openai-chat',
     name: 'openai-chat',

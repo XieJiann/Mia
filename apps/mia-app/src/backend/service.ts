@@ -11,8 +11,10 @@ export const Constants = {
   SettingsKey: '_settings',
   DefaultUserId: '_user',
 
-  PredefinedBotIds: new Set(['_chatgpt', '_dalle']),
-  PredefinedBotTemplateIds: new Set(['_openai-chat', '_openai-image']),
+  NopBotId: '_nop',
+  NopBotTemplateId: '_nop',
+  PredefinedBotIds: new Set(['_chatgpt', '_dalle', '_nop']),
+  PredefinedBotTemplateIds: new Set(['_openai-chat', '_openai-image', '_nop']),
 
   BotTemplateOpenaiChat: '_openai-chat',
   BotTemplateOpenaiImage: '_openai-image',
@@ -120,29 +122,55 @@ class MiaServiceState {
   // internal states (in-memory)
   sendMessageTaskHandler = new Map<string, IStreamHandler<MessageReply>>()
   botNameCache = new Map<string, models.Bot>()
+  botIdCache = new Map<string, models.Bot>()
 
   constructor(private miaService: MiaService) {}
 
-  async getBotByName(botName: string): Promise<Result<models.Bot>> {
-    let bot = this.botNameCache.get(botName)
-    if (!bot) {
-      const botRes = await this.miaService.getBotByName(botName)
-      if (!botRes.ok) {
-        return botRes
-      }
+  async getBot(p: { id?: string; name?: string }): Promise<Result<models.Bot>> {
+    // try to get bot by id
+    if (p.id) {
+      let bot = this.botIdCache.get(p.id)
+      if (!bot) {
+        const botRes = await this.miaService.getBotById(p.id)
+        if (!botRes.ok) {
+          return botRes
+        }
 
-      bot = botRes.value
-      this.botNameCache.set(botName, bot)
+        bot = botRes.value
+        this.botIdCache.set(p.id, bot)
+      }
+      return { ok: true, value: bot }
+    }
+
+    // try to get bot by name
+    if (p.name) {
+      let bot = this.botNameCache.get(p.name)
+      if (!bot) {
+        const botRes = await this.miaService.getBotByName(p.name)
+        if (!botRes.ok) {
+          return botRes
+        }
+
+        bot = botRes.value
+        this.botNameCache.set(p.name, bot)
+      }
+      return { ok: true, value: bot }
     }
 
     return {
-      ok: true,
-      value: bot,
+      ok: false,
+      error: new Error(`bot not found: ${JSON.stringify(p)}`),
     }
   }
 
-  async refreshBotByName(botName: string): Promise<void> {
-    this.botNameCache.delete(botName)
+  async refreshBot(p: { id?: string; name?: string }): Promise<void> {
+    if (p.name) {
+      this.botNameCache.delete(p.name)
+    }
+
+    if (p.id) {
+      this.botIdCache.delete(p.id)
+    }
   }
 }
 
@@ -254,6 +282,7 @@ export class MiaService {
     const { pageSize = 20, currentPage = 1 } = filters
 
     queryFilters.push(
+      Q.where('id', Q.notEq(Constants.NopBotId)),
       Q.sortBy(filters.orderBy || 'created_at', filters.order),
       Q.take(pageSize),
       Q.skip(pageSize * (currentPage - 1))
@@ -326,7 +355,10 @@ export class MiaService {
         return botRes
       }
       const bot = botRes.value
-      this.state.refreshBotByName(bot.name)
+      this.state.refreshBot({
+        id: bot.id,
+        name: bot.name,
+      })
 
       if (p.name) {
         const nameRes = await this.checkBotNameValid({
@@ -362,8 +394,14 @@ export class MiaService {
       } as Result<boolean>
     })
 
+    this.state.refreshBot({
+      id: botId,
+    })
+
     if (p.name) {
-      this.state.refreshBotByName(p.name)
+      this.state.refreshBot({
+        name: p.name,
+      })
     }
 
     return res
@@ -424,6 +462,7 @@ export class MiaService {
     const { pageSize = 20, currentPage = 1 } = filters
 
     queryFilters.push(
+      Q.where('id', Q.notEq(Constants.NopBotTemplateId)),
       Q.sortBy(filters.orderBy || 'created_at', filters.order),
       Q.take(pageSize),
       Q.skip(pageSize * (currentPage - 1))
@@ -668,20 +707,73 @@ export class MiaService {
       return { ok: false, error: new Error('Chat not found') }
     }
 
-    const message = await this.messageTable.find(p.messageId)
-    if (!message) {
+    const curMessage = await this.messageTable.find(p.messageId)
+    if (!curMessage) {
       return { ok: false, error: new Error('Message not found') }
     }
-    if (message.senderType !== 'bot') {
+
+    if (curMessage.senderType === 'bot') {
+      return this._regenerateBotMessage({
+        chat,
+        replyMessage: curMessage,
+        ...p,
+      })
+    }
+
+    // user
+
+    // find next message
+    const nextMessages = await this._queryFilteredHistory(
+      chat,
+      Q.where('created_at', Q.gt(curMessage.createdAt.getTime())),
+      Q.take(1)
+    )
+
+    // no next message, create new message
+    if (nextMessages.length === 0) {
+      const { replyMsg } = await database.write(async () => {
+        const replyMsg = await this.messageTable.create((m) => {
+          m.chat.id = chat.id
+          m.senderType = 'bot'
+          m.senderId = '_nop'
+          m.content = ''
+          m.loadingStatus = 'wait_first'
+        })
+        return { replyMsg }
+      })
+
+      p.onChatUpdated(chat.id)
+
+      return this._regenerateBotMessage({
+        chat,
+        replyMessage: replyMsg,
+        ...p,
+      })
+    }
+
+    // update next message
+    return this._regenerateBotMessage({
+      chat,
+      replyMessage: nextMessages[0],
+      ...p,
+    })
+  }
+
+  async _regenerateBotMessage(
+    p: {
+      chat: models.ChatModel
+      replyMessage: models.ChatMessageModel
+    } & MessageStreamCallbacks
+  ): Promise<Result<boolean>> {
+    const { chat, replyMessage } = p
+    if (replyMessage.senderType !== 'bot') {
       return {
         ok: false,
-        error: new Error(
-          `message is not sent by bot, got=${message.senderType}`
-        ),
+        error: new Error(`message is not generated by bot`),
       }
     }
 
-    if (message.deletedAt) {
+    if (replyMessage.deletedAt) {
       return {
         ok: false,
         error: new Error(`message is deleted`),
@@ -689,19 +781,17 @@ export class MiaService {
     }
 
     await database.write(async () => {
-      await message.update((m) => {
+      await replyMessage.update((m) => {
         m.content = ''
         m.loadingStatus = 'wait_first'
       })
     })
 
     const history = await this._queryFilteredHistory(chat)
-      .extend(Q.where('created_at', Q.lt(message.createdAt.getTime())))
+      .extend(Q.where('created_at', Q.lt(replyMessage.createdAt.getTime())))
       .fetch()
 
     const resp = await this._handleSendMessage({
-      chat,
-      replyMessage: message,
       toSendMessages: history,
       ...p,
     })
@@ -738,7 +828,7 @@ export class MiaService {
       const replyMsg = await this.messageTable.create((m) => {
         m.chat.id = chat.id
         m.senderType = 'bot'
-        m.senderId = '_chatgpt'
+        m.senderId = '_nop'
         m.content = ''
         m.loadingStatus = 'wait_first'
       })
@@ -770,28 +860,33 @@ export class MiaService {
     }
 
     const lastMessage = p.toSendMessages[p.toSendMessages.length - 1]
-    if (lastMessage.senderType !== 'user') {
-      return {
-        ok: false,
-        error: new Error(`last message is not sent by user`),
+
+    let botRes: Result<models.Bot> = {
+      ok: false,
+      error: new Error('no bot'),
+    }
+
+    if (p.replyMessage.senderId === '_nop') {
+      // try get bot from message
+      let botName = this.settings.chatDefaultSettings.defaultBotName
+      const { name: parsedBotName } = extractBotNamePrefix(lastMessage.content)
+      if (parsedBotName) {
+        botName = parsedBotName
       }
+      botRes = await this.state.getBot({
+        name: botName,
+      })
+    } else {
+      // get bot from id
+      botRes = await this.state.getBot({
+        id: p.replyMessage.senderId,
+      })
     }
 
     // try get bot
-    let botName = this.settings.chatDefaultSettings.defaultBotName
-    const { name: parsedBotName } = extractBotNamePrefix(lastMessage.content)
-    if (parsedBotName) {
-      botName = parsedBotName
-    }
 
-    const botRes = await this.state.getBotByName(botName)
     if (!botRes.ok) {
-      return {
-        ok: false,
-        error: new Error(`failed to get bot, ${botName}`, {
-          cause: botRes.error,
-        }),
-      }
+      return botRes
     }
 
     const bot = botRes.value
@@ -866,11 +961,12 @@ export class MiaService {
     return { ok: true, value: true }
   }
 
-  private _queryFilteredHistory(chat: models.ChatModel) {
+  private _queryFilteredHistory(chat: models.ChatModel, ...quries: Q.Clause[]) {
     return chat.messages.extend(
       Q.sortBy('created_at', 'asc'),
       Q.where('ignore_at', null),
-      Q.where('deleted_at', null)
+      Q.where('deleted_at', null),
+      ...quries
     )
   }
 }

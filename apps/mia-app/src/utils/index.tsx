@@ -35,14 +35,19 @@ export function extractBotNamePrefix(content: string): {
   content: string
   trimedContent: string
 } {
-  const match = content.match(/^@([^@\s]+)\s*(.*)/)
+  const botNamePattern = /^@([-_.$0-9a-zA-Z]+)/
+
+  const trimed = content.trimStart()
+
+  const match = trimed.match(botNamePattern)
   if (match) {
     return {
       name: match[1],
-      content: match[0],
-      trimedContent: match[2],
+      content,
+      trimedContent: trimed.slice(match[0].length),
     }
   }
+
   return {
     name: '',
     content,

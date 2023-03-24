@@ -9,7 +9,8 @@ import {
   Typography,
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
-import { models } from '../../backend/service'
+import { Constants, models } from '../../backend/service'
+import { useTopSnakebar } from '../../hooks/useSnakeBar'
 
 export interface BotListItemProps {
   bot: models.BotMeta
@@ -17,7 +18,14 @@ export interface BotListItemProps {
 export default function BotListItem({ bot }: BotListItemProps) {
   const navigate = useNavigate()
 
+  const { enqueueSnackbar } = useTopSnakebar()
+
   const handleEditBot = () => {
+    if (Constants.PredefinedBotIds.has(bot.id)) {
+      enqueueSnackbar('Cannot edit predefined bot', { variant: 'error' })
+      return
+    }
+
     navigate(`/bots/${bot.id}/update`)
   }
 

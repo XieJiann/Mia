@@ -181,7 +181,8 @@ export default function ChatMessageActionBar({
   return (
     <Box display="flex" justifyContent="space-between">
       {/* Dummy box */}
-      {isUser ? <Box /> : renderGenerateButton()}
+      {/* {isUser ? <Box /> : renderGenerateButton()} */}
+      {renderGenerateButton()}
       {!isLoading && renderButtons()}
     </Box>
   )

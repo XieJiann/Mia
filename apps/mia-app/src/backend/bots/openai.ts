@@ -56,7 +56,7 @@ export class OpenaiChatBot implements IBotService {
     const apiMessages: api_t.ChatCompletionMessage[] = [
       ...prevMessages,
       {
-        role: 'user',
+        role: 'system',
         content: `Remeber you'are not an AI Model, and your id is @${this.params.botName}. This is your settings: ${initialPrompts}`,
       },
       lastMessage,
