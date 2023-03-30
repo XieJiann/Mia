@@ -56,7 +56,7 @@ export class OpenaiChatBot implements IBotService {
         if (v.senderType === 'bot') {
           return {
             senderType: v.senderType,
-            content: `(By: @${v.senderId}) ${v.content}`,
+            content: `${v.content}`,
           }
         }
         return v
@@ -77,6 +77,7 @@ export class OpenaiChatBot implements IBotService {
 
     const streamHandler = this.openaiClient.createChatCompletionsStream({
       model: 'gpt-3.5-turbo',
+      // model: 'gpt-4-0314',
       messages: apiMessages,
     })
 
@@ -117,7 +118,8 @@ export class OpenaiImageBot implements IBotService {
     const streamHandler = this.openaiClient.generateImages({
       prompt: trimedContent,
       response_format: 'url',
-      size: '256x256',
+      // size: '256x256',
+      size: '512x512',
     })
 
     return streamHandler.map((reply) => {

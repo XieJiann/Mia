@@ -105,7 +105,7 @@ const ChatMessageItem = React.memo(
 
     const renderContent = () => {
       // console.log(message.id, { content: message.content })
-      // We use display none rather than if to avoid the ui bug
+      // We use display none rather than `if` to avoid the ui bug
       return (
         <Collapse in={!isCollapsed} timeout="auto">
           <Input
@@ -184,7 +184,9 @@ const ChatMessageItem = React.memo(
                 borderRadius: '12px',
                 // backgroundColor: isUser ? '#1777ff' : '#ffffff',
                 backgroundColor: isUser ? '#95ec69' : '#ffffff',
+                alignSelf: isUser ? 'flex-end' : 'flex-start',
                 maxWidth: 'calc(min(80vw, 500px))',
+                width: 'fit-content',
                 minWidth: '10px',
                 minHeight: '40px',
               }}

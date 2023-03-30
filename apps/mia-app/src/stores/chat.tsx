@@ -12,6 +12,7 @@ import {
   ListFiltersFromString,
   GetLoading,
   MiaService,
+  MessageStreamCallbacks,
 } from '../backend/service'
 import { Result } from '../types'
 
@@ -114,6 +115,19 @@ function createChatStore() {
       })
     }
 
+    const messageStreamCallbacks: MessageStreamCallbacks = {
+      onChatUpdated(chatId) {
+        handleRefreshChat(chatId)
+        handleRefreshViews()
+      },
+      onMessageListUpdated(chatId) {
+        handleRefreshChat(chatId)
+      },
+      onMessageUpdated(messageId) {
+        handleRefreshMessage(messageId)
+      },
+    }
+
     return {
       chats: {},
       chatsView: {},
@@ -191,12 +205,7 @@ function createChatStore() {
       }): Promise<Result<boolean>> {
         const resp = await miaService.sendNewMessage({
           ...p,
-          onChatUpdated(chatId) {
-            handleRefreshChat(chatId)
-          },
-          onMessageUpdated(messageId) {
-            handleRefreshMessage(messageId)
-          },
+          ...messageStreamCallbacks,
         })
         return resp
       },
@@ -204,12 +213,7 @@ function createChatStore() {
       async autoReplyMessage(p) {
         const resp = await miaService.autoReplyMessage({
           ...p,
-          onMessageUpdated(messageId) {
-            handleRefreshMessage(messageId)
-          },
-          onChatUpdated(chatId) {
-            handleRefreshChat(chatId)
-          },
+          ...messageStreamCallbacks,
         })
         return resp
       },
@@ -218,12 +222,7 @@ function createChatStore() {
         // more fine-grained refresh
         const resp = await miaService.regenerateMessage({
           ...p,
-          onChatUpdated(chatId) {
-            handleRefreshChat(chatId)
-          },
-          onMessageUpdated(messageId) {
-            handleRefreshMessage(messageId)
-          },
+          ...messageStreamCallbacks,
         })
         return resp
       },

@@ -85,8 +85,9 @@ import { extractBotNamePrefix } from '../utils'
 import { createBotService } from './bots/factory'
 export type { Character, Chat, ChatMessageMeta as ChatMessage, ChatMeta }
 
-interface MessageStreamCallbacks {
+export interface MessageStreamCallbacks {
   onMessageUpdated: (messageId: string) => void
+  onMessageListUpdated: (chatId: string) => void
   onChatUpdated: (chatId: string) => void
 }
 
@@ -588,6 +589,74 @@ export class MiaService {
     })
   }
 
+  async autoTitleChat(p: { chatId: string }): Promise<Result<boolean>> {
+    const chatRes = await getByIdFromTable(this.chatTable, p.chatId)
+    if (!chatRes.ok) {
+      return chatRes
+    }
+
+    const chat = chatRes.value
+
+    return this._autoTitleChat({ chat })
+  }
+
+  async _autoTitleChat(p: {
+    chat: models.ChatModel
+  }): Promise<Result<boolean>> {
+    // we will pick first two messages
+    const messages = await this._queryFilteredHistory(p.chat, Q.take(1))
+    if (messages.length === 0) {
+      return {
+        ok: false,
+        error: new Error('No message in chat'),
+      }
+    }
+
+    const prompt = `你需要根据聊天的一到两句话，为聊天取个标题，不超过十个字。标题的语言与文字的语言一致。这些话为：`
+
+    let content = prompt
+
+    if (messages[0]) {
+      content += `${messages[0].content}`
+    }
+
+    if (messages[1]) {
+      content += ` ${messages[1].content}`
+    }
+
+    const apiRes = await this.openaiClient.createChatCompletions({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'user',
+          content,
+        },
+      ],
+    })
+
+    if (!apiRes.ok) {
+      return apiRes
+    }
+
+    let title = apiRes.value.choices[0]?.message.content || p.chat.name
+
+    // unicode aware slice
+    title = [...title].slice(0, 20).join('')
+
+    title = title.replaceAll('"', '').replaceAll('”', '')
+
+    await database.write(async () => {
+      await p.chat.update((c) => {
+        c.name = title
+      })
+    })
+
+    return {
+      ok: true,
+      value: true,
+    }
+  }
+
   // messages
 
   async updateMessage(
@@ -742,7 +811,7 @@ export class MiaService {
         return { replyMsg }
       })
 
-      p.onChatUpdated(chat.id)
+      p.onMessageListUpdated(chat.id)
 
       return this._regenerateBotMessage({
         chat,
@@ -818,7 +887,7 @@ export class MiaService {
       return { replyMsg }
     })
 
-    p.onChatUpdated(chat.id)
+    p.onMessageListUpdated(chat.id)
 
     return this._regenerateBotMessage({
       chat,
@@ -864,16 +933,28 @@ export class MiaService {
       return { userMsg, replyMsg }
     })
 
-    p.onChatUpdated(chat.id)
+    p.onMessageListUpdated(chat.id)
+
+    const isNew = history.length === 0
+
+    // newly added message, we generate a title
+    if (isNew) {
+      // no await
+      this._autoTitleChat({ chat }).then(() => {
+        p.onChatUpdated(chat.id)
+      })
+    }
 
     const toSendMessages = [...history, userMsg]
 
-    return this._handleSendMessage({
+    const resp = await this._handleSendMessage({
       chat,
       replyMessage: replyMsg,
       toSendMessages,
       ...p,
     })
+
+    return resp
   }
 
   private async _handleSendMessage(

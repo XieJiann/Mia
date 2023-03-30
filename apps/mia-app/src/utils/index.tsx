@@ -50,26 +50,35 @@ export function extractBotNamePrefixExplict(content: string) {
   }
 }
 
+const sentenceEndCharacters = /[.!?\s,\u3002\uff1f\uff01\uff0c]/
 // Extract botname prefix, like `@chatgpt hello, world` -> {name: chatgpt, content: '@chatgpt ...', trimedContent: 'hello, world'}
 export function extractBotNamePrefix(content: string): {
   name: string
   content: string
   trimedContent: string
 } {
-  // try first
-  const res1 = extractBotNamePrefixExplict(content)
+  const trimed = content.trimStart()
 
-  if (res1.name) {
-    return res1
-  }
+  const botNamePattern = /@([-_.$0-9a-zA-Z]+)/
 
-  // try second sentence
-  const sentences = content.split(/[.!?:\u3002\uFF01\uff1a]/, 2)
-  console.log(`sentences`, sentences)
-  if (sentences.length >= 2) {
-    const res2 = extractBotNamePrefixExplict(sentences[1])
-    if (res2.name) {
-      return res2
+  const match = trimed.match(botNamePattern)
+
+  if (match) {
+    const trimedContent = trimed.slice(match.index || 0 + match.length)
+
+    const index = match.index || 0
+    if (index > 0 && !sentenceEndCharacters.test(trimed[index - 1])) {
+      return {
+        name: '',
+        content,
+        trimedContent: content,
+      }
+    }
+
+    return {
+      name: match[1],
+      content: trimed,
+      trimedContent,
     }
   }
 
