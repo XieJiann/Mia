@@ -18,6 +18,7 @@ const CollpaseButton = styled(
   )
 )(({ theme, collapsed }) => ({
   transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)',
+  padding: 0,
   marginLeft: 'auto',
   transition: theme.transitions.create('transform', {
     duration: theme.transitions.duration.shortest,

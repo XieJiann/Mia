@@ -4,11 +4,16 @@ import ChatInputBar from './ChatInputBar'
 
 import { useMemo } from 'react'
 import ChatMessageList from './ChatMessageList'
+import { useIsMobile } from '../../hooks'
 
 export function ChatPanel(props: { chat: chat_t.Chat }) {
   const { chat } = props
 
   const chatMessages = useMemo(() => chat.messages, [chat.messages])
+
+  const isMobile = useIsMobile()
+
+  const maxWidth = isMobile ? '100vw' : '800px'
 
   return (
     <Box
@@ -29,12 +34,20 @@ export function ChatPanel(props: { chat: chat_t.Chat }) {
           flexGrow: '1',
         }}
       >
-        <ChatMessageList messages={chatMessages} />
+        <ChatMessageList messages={chatMessages} maxWidth={maxWidth} />
       </Box>
 
       {/* Input bar */}
-      <Box sx={{ position: 'absolute', bottom: 0, width: '100%' }}>
-        <ChatInputBar chatId={chat.id} />
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 0,
+          width: '100%',
+        }}
+      >
+        <Box sx={{ maxWidth: maxWidth, margin: '0 auto' }}>
+          <ChatInputBar chatId={chat.id} />
+        </Box>
       </Box>
     </Box>
   )

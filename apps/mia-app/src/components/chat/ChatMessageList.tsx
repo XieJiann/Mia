@@ -4,7 +4,7 @@ import { Virtuoso, VirtuosoHandle, VirtuosoProps } from 'react-virtuoso'
 import * as chat_t from '../../stores/chat'
 import { shallow } from '../../stores'
 import ChatMessageItem from './ChatMessageItem'
-import { useMemoizedFn, useThrottleFn } from 'ahooks'
+import { useCreation, useMemoizedFn, useThrottleFn } from 'ahooks'
 import { useSnackbar } from 'notistack'
 import { formatErrorUserFriendly } from '../../utils'
 
@@ -46,11 +46,13 @@ function ObserveHeight({
 }
 
 export interface ChatMessageListProps {
+  maxWidth: string
   messages: chat_t.ChatMessage[]
 }
-export default function ChatMessageList({ messages }: ChatMessageListProps) {
-  // TODO: impl to bottom button, see https://virtuoso.dev/stick-to-bottom/
-  // We use followOutput=auto to scroll to bottom when totalCount changes
+export default function ChatMessageList({
+  messages,
+  maxWidth,
+}: ChatMessageListProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null)
 
   const [regenerateMessage, stopGenerateMessage, updateMessage, deleteMessage] =
@@ -94,13 +96,45 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
       return { ok: true, value: true }
     })
 
+  const virtuosoComponents: VirtuosoProps<unknown, unknown>['components'] =
+    useCreation(
+      () => ({
+        Header: () => {
+          /* Workaround, use dummy div */
+          return <Box sx={{ height: '80px' }}></Box>
+        },
+        Footer: () => {
+          /* Workaround, use dummy div */
+          return <Box sx={{ height: '20px' }}></Box>
+        },
+        List: React.forwardRef(({ style, children }, listRef) => {
+          return (
+            <List
+              style={{
+                padding: 0,
+                ...style,
+                marginLeft: 'auto',
+                marginRight: 'auto',
+                maxWidth,
+              }}
+              component="div"
+              ref={listRef}
+            >
+              {children}
+            </List>
+          )
+        }),
+      }),
+      [maxWidth]
+    )
+
   return (
     <Virtuoso
       ref={virtuosoRef}
       style={{
         height: 'calc(100vh - 100px)',
       }}
-      components={VirtuosoComponents}
+      components={virtuosoComponents}
       followOutput={'auto'}
       initialTopMostItemIndex={messages.length - 1}
       totalCount={messages.length}
@@ -131,7 +165,7 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
                 if (prevHeight <= 0) {
                   return
                 }
-                handleScrollToButtom()
+                // handleScrollToButtom()
               }}
               throttle={500}
             >
@@ -144,16 +178,4 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
       }}
     />
   )
-}
-
-// @see https://virtuoso.dev/material-ui-endless-scrolling/
-const VirtuosoComponents: VirtuosoProps<unknown, unknown>['components'] = {
-  Header: () => {
-    /* Workaround, use dummy div */
-    return <Box sx={{ height: '80px' }}></Box>
-  },
-  Footer: () => {
-    /* Workaround, use dummy div */
-    return <Box sx={{ height: '20px' }}></Box>
-  },
 }

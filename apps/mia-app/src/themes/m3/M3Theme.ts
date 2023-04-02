@@ -229,6 +229,12 @@ declare module '@mui/material/Button' {
   }
 }
 
+declare module '@mui/material/IconButton' {
+  interface IconButtonPropsSizeOverrides {
+    smallNoPad: true
+  }
+}
+
 declare module '@mui/material/Paper' {
   interface PaperPropsVariantOverrides {
     filled: true
@@ -410,10 +416,16 @@ export const getThemedComponents = (
       },
       MuiIconButton: {
         styleOverrides: {
-          root: {
-            // padding: theme.spacing(1),
-          },
+          root: {},
         },
+        variants: [
+          {
+            props: { size: 'smallNoPad' },
+            style: {
+              padding: 0,
+            },
+          },
+        ],
       },
       MuiTabs: {
         styleOverrides: {

@@ -1,5 +1,13 @@
-import { Stack, Tooltip, IconButton, Box } from '@mui/material'
-import { useState } from 'react'
+import {
+  Stack,
+  Tooltip,
+  Box,
+  SxProps,
+  Theme,
+  IconButton,
+  IconButtonProps,
+} from '@mui/material'
+import React, { useState } from 'react'
 import { models } from '../../backend/service'
 import {
   CancelOutlined,
@@ -15,6 +23,13 @@ import {
 } from '@mui/icons-material'
 import { ChatStore } from '../../stores/chat'
 import CollpaseButton from '../forms/CollapseButton'
+import { useIsMobile } from '../../hooks'
+
+const ActionButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
+  (props, ref) => {
+    return <IconButton ref={ref} size="small" sx={{ padding: 0 }} {...props} />
+  }
+)
 
 export type ConfirmingActionKeys = 'edit' | 'delete'
 export interface ChatMessageActionBarProps {
@@ -26,6 +41,7 @@ export interface ChatMessageActionBarProps {
   onStartConfirming: (key: ConfirmingActionKeys) => void
   onConfirm: () => void
   onCancelConfirm: () => void
+  sx?: SxProps<Theme>
 }
 export default function ChatMessageActionBar({
   message,
@@ -36,6 +52,7 @@ export default function ChatMessageActionBar({
   onStartConfirming,
   onConfirm,
   onCancelConfirm,
+  sx,
 }: ChatMessageActionBarProps) {
   const [copied, setCopied] = useState<boolean>(false)
 
@@ -48,14 +65,20 @@ export default function ChatMessageActionBar({
   const isIgnored = message.ignoreAt
   const isCollapsed = message.ui.collapsed
 
-  const toggleVisible = () => {
-    onUpdateMessage(message.id, {
+  const isVisible = isCollapsed || confirming || isLoading
+
+  const toggleIgnore = () => {
+    onUpdateMessage({
+      chatId: message.chat.id,
+      messageId: message.id,
       toggleIgnore: true,
     })
   }
 
   const toggleCollapse = () => {
-    onUpdateMessage(message.id, {
+    onUpdateMessage({
+      chatId: message.chat.id,
+      messageId: message.id,
       toggleCollapse: true,
     })
   }
@@ -65,19 +88,18 @@ export default function ChatMessageActionBar({
       return (
         <>
           <Tooltip title="confirm">
-            <IconButton
-              size="small"
-              color="primary"
-              aria-label="yes"
-              onClick={onConfirm}
-            >
+            <ActionButton size="small" aria-label="yes" onClick={onConfirm}>
               <CheckIcon fontSize="inherit" />
-            </IconButton>
+            </ActionButton>
           </Tooltip>
           <Tooltip title="cancel">
-            <IconButton size="small" aria-label="no" onClick={onCancelConfirm}>
+            <ActionButton
+              size="small"
+              aria-label="no"
+              onClick={onCancelConfirm}
+            >
               <CloseIcon fontSize="inherit" />
-            </IconButton>
+            </ActionButton>
           </Tooltip>
         </>
       )
@@ -86,26 +108,24 @@ export default function ChatMessageActionBar({
     return (
       <>
         <Tooltip title="Edit Message">
-          <IconButton
+          <ActionButton
             size="small"
-            color="secondary"
             onClick={(e) => {
               onStartConfirming('edit')
             }}
           >
             <EditOutlined fontSize="inherit" />
-          </IconButton>
+          </ActionButton>
         </Tooltip>
         <Tooltip title="Delete Message">
-          <IconButton
+          <ActionButton
             size="small"
-            color="secondary"
             onClick={(e) => {
               onStartConfirming('delete')
             }}
           >
             <DeleteOutline fontSize="inherit" />
-          </IconButton>
+          </ActionButton>
         </Tooltip>
       </>
     )
@@ -113,24 +133,27 @@ export default function ChatMessageActionBar({
 
   const renderButtons = () => {
     return (
-      <Stack direction="row">
+      <Stack direction="row" gap="12px">
         <Tooltip title={isCollapsed ? 'Expand' : 'Collapse'}>
-          <CollpaseButton collapsed={isCollapsed} onClick={toggleCollapse} />
+          <CollpaseButton
+            size="small"
+            collapsed={isCollapsed}
+            onClick={toggleCollapse}
+          />
         </Tooltip>
         <Tooltip title={isIgnored ? 'Unignore' : 'Ignore'}>
-          <IconButton size="small" onClick={toggleVisible}>
+          <ActionButton size="small" onClick={toggleIgnore}>
             {isIgnored ? (
-              <VisibilityOff fontSize="inherit" />
-            ) : (
               <Visibility fontSize="inherit" />
+            ) : (
+              <VisibilityOff fontSize="inherit" />
             )}
-          </IconButton>
+          </ActionButton>
         </Tooltip>
         {renderConfirmingButtons()}
         <Tooltip title="Copy Message">
-          <IconButton
+          <ActionButton
             size="small"
-            color="secondary"
             onClick={async () => {
               await navigator.clipboard.writeText(message.content)
               setCopied(true)
@@ -142,7 +165,7 @@ export default function ChatMessageActionBar({
             ) : (
               <CopyAllRoundedIcon fontSize="inherit" />
             )}
-          </IconButton>
+          </ActionButton>
         </Tooltip>
       </Stack>
     )
@@ -152,34 +175,38 @@ export default function ChatMessageActionBar({
     if (isLoading) {
       return (
         <Tooltip title="Stop Generate">
-          <IconButton
+          <ActionButton
             size="small"
             color="warning"
             onClick={() => onStopGenerate({ messageId: message.id })}
           >
             <CancelOutlined fontSize="inherit" />
-          </IconButton>
+          </ActionButton>
         </Tooltip>
       )
     }
 
     return (
       <Tooltip title="Regenerate">
-        <IconButton
+        <ActionButton
           size="small"
           onClick={() =>
             onRegenerate({ messageId: message.id, chatId: message.chat.id })
           }
-          color="primary"
         >
           <RefreshIcon fontSize="inherit" />
-        </IconButton>
+        </ActionButton>
       </Tooltip>
     )
   }
 
   return (
-    <Box display="flex" justifyContent="space-between">
+    <Box
+      display="flex"
+      justifyContent="space-between"
+      visibility={isVisible ? 'visible' : 'hidden'}
+      sx={sx}
+    >
       {/* Dummy box */}
       {/* {isUser ? <Box /> : renderGenerateButton()} */}
       {renderGenerateButton()}

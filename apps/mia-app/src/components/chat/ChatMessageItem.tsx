@@ -1,6 +1,7 @@
 import {
   Avatar,
   Box,
+  Chip,
   Collapse,
   Input,
   ListItem,
@@ -49,7 +50,11 @@ const ChatMessageItem = React.memo(
     } = useEditable({
       value: message.content,
       onValueEdited(value) {
-        onUpdateMessage(message.id, { content: value })
+        onUpdateMessage({
+          chatId: message.chat.id,
+          messageId: message.id,
+          content: value,
+        })
       },
     })
 
@@ -144,14 +149,15 @@ const ChatMessageItem = React.memo(
     return (
       <ListItem
         sx={{
-          flexDirection: isUser ? 'row-reverse' : 'row',
-          alignItems: 'flex-start',
+          flexDirection: 'row',
+          alignItems: 'stretch',
           mb: '4px',
-          gap: '8px',
+          gap: '10px',
         }}
       >
         <ListItemAvatar sx={{ minWidth: 0 }}>{renderAvatar()}</ListItemAvatar>
         <Box
+          flex="1"
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -159,41 +165,43 @@ const ChatMessageItem = React.memo(
             alignItems: 'stretch',
           }}
         >
-          <Stack
-            direction={isUser ? 'row-reverse' : 'row'}
-            justifyContent="space-between"
-          >
+          <Stack direction="row" justifyContent="space-between" mr="8px">
             <Box
               component="span"
               lineHeight="1"
-              fontSize="13px"
-              color="#AAAAAA"
+              fontSize="14px"
+              fontWeight="bold"
             >
               {displayName}
             </Box>
-            <Box component="span" lineHeight="1" fontSize="13px" color="red">
-              {isHide && 'Ignored'}
-            </Box>
+            <Stack direction="row" gap="8px">
+              <Box component="span" lineHeight="1" fontSize="13px" color="red">
+                {isHide && 'Ignored'}
+              </Box>
+              <Box component="span" lineHeight="1" fontSize="13px" color="blue">
+                {isCollapsed && 'Collapsed'}
+              </Box>
+            </Stack>
           </Stack>
-          <Box display="flex" flexDirection="column" gap="2px">
-            <Paper
+          <Box
+            display="flex"
+            flexDirection="column"
+            gap="8px"
+            sx={{
+              ':hover > div': {
+                visibility: 'visible',
+              },
+            }}
+          >
+            <Box
               sx={{
-                padding: '8px 16px',
-                paddingBottom: '8px',
-                // color: isUser ? 'primary.contrastText' : 'black',
-                borderRadius: '12px',
-                // backgroundColor: isUser ? '#1777ff' : '#ffffff',
-                backgroundColor: isUser ? '#95ec69' : '#ffffff',
-                alignSelf: isUser ? 'flex-end' : 'flex-start',
-                maxWidth: 'calc(min(80vw, 500px))',
-                width: 'fit-content',
+                borderRadius: '4px',
                 minWidth: '10px',
-                minHeight: '40px',
+                paddingRight: '8px',
               }}
-              elevation={isUser ? 0 : 1}
             >
               {waitingReceive ? 'Loading ...' : renderContent()}
-            </Paper>
+            </Box>
             <ChatMessageActionBar
               onRegenerate={onRegenerate}
               onStopGenerate={onStopGenerate}
@@ -206,8 +214,6 @@ const ChatMessageItem = React.memo(
             />
           </Box>
         </Box>
-
-        <Box width="40px" />
       </ListItem>
     )
   }

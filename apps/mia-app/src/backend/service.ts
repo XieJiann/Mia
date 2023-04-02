@@ -6,6 +6,8 @@ import { api_t, OpenAIClient } from '../api'
 import { Collection, Model, Q } from '@nozbe/watermelondb'
 import { IStreamHandler, Result } from '../types'
 
+import * as messageUtils from '../utils/message'
+
 // Consts
 export const Constants = {
   SettingsKey: '_settings',
@@ -589,6 +591,34 @@ export class MiaService {
     })
   }
 
+  async countTokensForChat(p: { chatId: string }): Promise<
+    Result<{
+      totalTokens: number
+    }>
+  > {
+    const chatRes = await getByIdFromTable(this.chatTable, p.chatId)
+    if (!chatRes.ok) {
+      return chatRes
+    }
+    const chat = chatRes.value
+
+    const messages = await this._queryFilteredHistory(chat)
+
+    const openaiMessages = messages.map((m) => ({
+      role: m.senderType === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    }))
+
+    const tokens = messageUtils.countTokens(openaiMessages, 'gpt3.5-turbo')
+
+    return {
+      ok: true,
+      value: {
+        totalTokens: tokens,
+      },
+    }
+  }
+
   async autoTitleChat(p: { chatId: string }): Promise<Result<boolean>> {
     const chatRes = await getByIdFromTable(this.chatTable, p.chatId)
     if (!chatRes.ok) {
@@ -659,13 +689,21 @@ export class MiaService {
 
   // messages
 
-  async updateMessage(
-    id: string,
-    p: { content?: string; toggleIgnore?: boolean; toggleCollapse?: boolean }
-  ): Promise<void> {
-    console.debug(`call updateMessage(${id})`, p)
+  async updateMessage(p: {
+    chatId: string
+    messageId: string
+    content?: string
+    toggleIgnore?: boolean
+    toggleCollapse?: boolean
+  }): Promise<void> {
+    console.debug(`call updateMessage(${p.messageId})`, p)
     await database.write(async () => {
-      const message = await this.messageTable.find(id)
+      const message = await this.messageTable.find(p.messageId)
+
+      if (message.chat.id !== p.chatId) {
+        throw new Error('Message is not in chat')
+      }
+
       return await message.update((b) => {
         if (p.content != null) {
           b.content = p.content

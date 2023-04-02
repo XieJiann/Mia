@@ -38,8 +38,8 @@ export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
 
   const isMobile = useIsMobile()
 
-  const [autoReplyMessage, sendNewMessage] = useChatStore(
-    (s) => [s.autoReplyMessage, s.sendNewMessage],
+  const [autoReplyMessage, sendNewMessage, chatTokens] = useChatStore(
+    (s) => [s.autoReplyMessage, s.sendNewMessage, s.getChatTokens({ chatId })],
     shallow
   )
 
@@ -88,7 +88,12 @@ export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
         width: '100%',
       }}
     >
-      <Stack direction="row" aria-label="input-bar-actions" px={1}>
+      <Stack
+        direction="row"
+        aria-label="input-bar-actions"
+        alignItems="center"
+        px={1}
+      >
         <Tooltip title="Auto Reply">
           <IconButton
             size="medium"
@@ -100,12 +105,21 @@ export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
             <AutoAwesome fontSize="inherit" />
           </IconButton>
         </Tooltip>
+
+        <Box
+          marginLeft="auto"
+          component="span"
+          fontStyle="italic"
+          fontSize="14px"
+        >
+          Tokens: {chatTokens.value?.totalTokens || 0}
+        </Box>
       </Stack>
       <Paper
         component="form"
         sx={{
           position: 'relative',
-          p: '4px 8px',
+          p: '4px 8px 4px 16px',
           display: 'flex',
           alignItems: 'flex-end',
           justifyContent: 'center',
@@ -114,7 +128,7 @@ export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
         elevation={1}
       >
         <InputBase
-          sx={{ ml: 1, flex: 1 }}
+          fullWidth
           placeholder="Type message (Ctrl+Enter to send)"
           value={text}
           onChange={(e) => setText(e.target.value)}

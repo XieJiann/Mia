@@ -40,6 +40,10 @@ export type ChatStore = {
     [key: string]: Result<Chat>
   }
 
+  chatTokens: {
+    [key: string]: Result<{ totalTokens: number }>
+  }
+
   listChats(p: ListFilters): ListPage<ChatMeta>
 
   getChat(id: string): GetLoading<Chat>
@@ -49,6 +53,8 @@ export type ChatStore = {
   updateChat(id: string, p: { name?: string }): Promise<void>
 
   deleteChat(id: string): Promise<void>
+
+  getChatTokens(p: { chatId: string }): GetLoading<{ totalTokens: number }>
 
   updateMessage: MiaService['updateMessage']
 
@@ -115,6 +121,14 @@ function createChatStore() {
       })
     }
 
+    const handleRefreshChatTokens = async (p: { chatId: string }) => {
+      const { chatId } = p
+      const res = await miaService.countTokensForChat(p)
+      set((s) => {
+        s.chatTokens[chatId] = res
+      })
+    }
+
     const messageStreamCallbacks: MessageStreamCallbacks = {
       onChatUpdated(chatId) {
         handleRefreshChat(chatId)
@@ -131,6 +145,7 @@ function createChatStore() {
     return {
       chats: {},
       chatsView: {},
+      chatTokens: {},
 
       getChat(id: string): GetLoading<Chat> {
         const chatRes = get().chats[id]
@@ -160,6 +175,16 @@ function createChatStore() {
         return get().chatsView[key]
       },
 
+      getChatTokens(p) {
+        const res = get().chatTokens[p.chatId]
+        if (!res) {
+          handleRefreshChatTokens(p)
+          return { loading: true }
+        }
+
+        return { loading: false, value: res.value, error: res.error }
+      },
+
       async updateChat(
         id: string,
         p: {
@@ -184,14 +209,18 @@ function createChatStore() {
         handleRefreshChat(id)
       },
 
-      async updateMessage(id, p) {
-        await miaService.updateMessage(id, p)
-        await handleRefreshMessage(id)
+      async updateMessage(p) {
+        await miaService.updateMessage(p)
+        await handleRefreshMessage(p.messageId)
+        if (p.toggleIgnore || p.content) {
+          await handleRefreshChatTokens({ chatId: p.chatId })
+        }
       },
 
       async deleteMessage(p) {
         await miaService.deleteMessage(p.messageId)
         await handleRefreshChat(p.chatId)
+        await handleRefreshChatTokens({ chatId: p.chatId })
       },
 
       async stopGenerateMessage(p) {
@@ -207,6 +236,8 @@ function createChatStore() {
           ...p,
           ...messageStreamCallbacks,
         })
+
+        await handleRefreshChatTokens({ chatId: p.chatId })
         return resp
       },
 
@@ -215,6 +246,8 @@ function createChatStore() {
           ...p,
           ...messageStreamCallbacks,
         })
+
+        await handleRefreshChatTokens({ chatId: p.chatId })
         return resp
       },
 
@@ -224,6 +257,8 @@ function createChatStore() {
           ...p,
           ...messageStreamCallbacks,
         })
+
+        await handleRefreshChatTokens({ chatId: p.chatId })
         return resp
       },
     }
