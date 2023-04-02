@@ -25,11 +25,11 @@
     "apps/*"
   ],
   "devDependencies": {
-    "@types/node": "^18.14.5",
-    "prettier": "^2.8.4",
-    "turbo": "^1.8.3",
-    "typescript": "^4.9.3",
-    "unbuild": "^1.1.2"
+    "@types/node": "^18.15.11",
+    "prettier": "^2.8.7",
+    "turbo": "^1.8.8",
+    "typescript": "^4.9.5",
+    "unbuild": "^1.2.0"
   },
   "turbo": {
     "npmClient": "pnpm",
