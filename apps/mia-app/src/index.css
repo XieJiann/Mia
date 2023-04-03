@@ -42,13 +42,13 @@ pre {
 :not(pre) > code.hljs,
 :not(pre) > code[class*='language-'] {
   border-radius: 0.3em;
-  white-space: normal;
+  white-space: pre-wrap;
 }
 .hljs-comment {
-  color: hsla(0, 0%, 100%, 0.5);
+  color: gray;
 }
 .hljs-meta {
-  color: hsla(0, 0%, 100%, 0.6);
+  color: gray;
 }
 .hljs-built_in,
 .hljs-class .hljs-title {

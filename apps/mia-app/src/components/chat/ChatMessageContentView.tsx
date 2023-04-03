@@ -102,15 +102,12 @@ const ChatMessageContentViewImpl = React.memo(
                     component="div"
                     sx={{ whiteSpace: 'pre !important' }}
                     className={`hljs language-${highlight.language}`}
-                  >
-                    <Box
-                      dangerouslySetInnerHTML={{
-                        __html: DOMPurify.sanitize(highlight.value, {
-                          USE_PROFILES: { html: true },
-                        }),
-                      }}
-                    />
-                  </Box>
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(highlight.value, {
+                        USE_PROFILES: { html: true },
+                      }),
+                    }}
+                  ></Box>
                 </Box>
               </Box>
             )
