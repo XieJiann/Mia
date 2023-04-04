@@ -123,9 +123,9 @@ type BotCache = {
 // Internal memory state, used for cache or stream connections
 class MiaServiceState {
   // internal states (in-memory)
-  sendMessageTaskHandler = new Map<string, IStreamHandler<MessageReply>>()
-  botNameCache = new Map<string, models.Bot>()
-  botIdCache = new Map<string, models.Bot>()
+  private botNameCache = new Map<string, models.Bot>()
+  private botIdCache = new Map<string, models.Bot>()
+  private sendMessageStreamHandler = new Map<string, IStreamHandler<unknown>>()
 
   constructor(private miaService: MiaService) {}
 
@@ -174,6 +174,18 @@ class MiaServiceState {
     if (p.id) {
       this.botIdCache.delete(p.id)
     }
+  }
+
+  registerSendMessageHandler(id: string, handler: IStreamHandler<unknown>) {
+    this.sendMessageStreamHandler.set(id, handler)
+  }
+
+  unregisterSendMessageHandler(id: string) {
+    this.sendMessageStreamHandler.delete(id)
+  }
+
+  getSendMessageHandler(id: string): IStreamHandler<unknown> | undefined {
+    return this.sendMessageStreamHandler.get(id)
   }
 }
 
@@ -788,7 +800,11 @@ export class MiaService {
   }
 
   async stopGenerateMessage(p: { messageId: string }) {
-    // TODO: stop stream job
+    const handler = this.state.getSendMessageHandler(p.messageId)
+    if (handler) {
+      handler.abort()
+    }
+
     await database.write(async () => {
       const message = await this.messageTable.find(p.messageId)
       if (!message) {
@@ -1006,6 +1022,10 @@ export class MiaService {
       return { ok: false, error: new Error('no message to send') }
     }
 
+    if (this.state.getSendMessageHandler(p.replyMessage.id)) {
+      return { ok: false, error: new Error('already sending') }
+    }
+
     const lastMessage = p.toSendMessages[p.toSendMessages.length - 1]
 
     let botRes: Result<models.Bot> = {
@@ -1080,7 +1100,13 @@ export class MiaService {
       p.onMessageUpdated(p.replyMessage.id)
     })
 
+    // register stream handler to state
+    this.state.registerSendMessageHandler(p.replyMessage.id, streamHandler)
+
     const resp = await streamHandler.wait()
+
+    // remove stream handler from state
+    this.state.unregisterSendMessageHandler(p.replyMessage.id)
 
     // sleep 50ms to make write finish
     // because watermelondb will queue the writer

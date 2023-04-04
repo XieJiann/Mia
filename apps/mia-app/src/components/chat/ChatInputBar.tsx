@@ -25,13 +25,14 @@ import { formatErrorUserFriendly } from '../../utils'
 
 export interface ChatInputBarProps {
   chatId: string
+  onFocus?: () => void
 }
 
 export function ChatInputBarMobile({}: ChatInputBarProps) {
   return <Box></Box>
 }
 
-export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
+export function ChatInputBarDesktop({ chatId, onFocus }: ChatInputBarProps) {
   const [text, setText] = useState('')
 
   const { enqueueSnackbar } = useSnackbar()
@@ -127,6 +128,7 @@ export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
         elevation={1}
       >
         <InputBase
+          onFocus={onFocus}
           fullWidth
           placeholder="Type message (Ctrl+Enter to send)"
           value={text}

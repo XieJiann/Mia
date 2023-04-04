@@ -30,28 +30,28 @@ export function makeStreamHandler<T>(
 }
 
 class ChainedStreamHandler<R, T> implements IStreamHandler<R> {
-  private handler: ((v: R, finished: boolean) => void) | undefined
+  private handler: ((v: R) => void) | undefined
   private buffered: R[] = []
 
   constructor(private parent: IStreamHandler<T>, private mapper: (v: T) => R) {
     parent.onData((v) => {
       const mapped = this.mapper(v)
       if (this.handler) {
-        this.handler(mapped, parent.isFinished())
+        this.handler(mapped)
       } else {
         this.buffered.push(mapped)
       }
     })
   }
 
-  onData(handler: (v: R, finished: boolean) => void): void {
+  onData(handler: (v: R) => void): void {
     if (this.handler) {
       throw new Error('duplicate handler')
     }
 
     this.handler = handler
     this.buffered.forEach((v) => {
-      handler(v, this.parent.isFinished())
+      handler(v)
     })
     this.buffered = []
   }
@@ -74,7 +74,7 @@ class ChainedStreamHandler<R, T> implements IStreamHandler<R> {
 }
 
 class StreamHandler<T> implements IStreamHandler<T>, StreamState<T> {
-  private handler: ((v: T, finished: boolean) => void) | undefined
+  private handler: ((v: T) => void) | undefined
   private abortController = new AbortController()
   private buffered: T[] = []
   private errors: Error[] = []
@@ -95,7 +95,7 @@ class StreamHandler<T> implements IStreamHandler<T>, StreamState<T> {
 
   addData(data: T): void {
     if (this.handler) {
-      this.handler(data, this.finished)
+      this.handler(data)
     } else {
       this.buffered.push(data)
     }
@@ -114,7 +114,7 @@ class StreamHandler<T> implements IStreamHandler<T>, StreamState<T> {
   }
 
   // stream handler
-  onData(handler: (v: T, finished: boolean) => void) {
+  onData(handler: (v: T) => void) {
     if (this.handler) {
       throw new Error('duplicate handler')
     }
@@ -122,7 +122,7 @@ class StreamHandler<T> implements IStreamHandler<T>, StreamState<T> {
     this.handler = handler
 
     for (const v of this.buffered) {
-      handler(v, this.finished)
+      handler(v)
     }
 
     this.buffered = []
