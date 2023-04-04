@@ -1,8 +1,8 @@
 import { Box, List } from '@mui/material'
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Virtuoso, VirtuosoHandle, VirtuosoProps } from 'react-virtuoso'
 import * as chat_t from '../../stores/chat'
-import { shallow } from '../../stores'
+import { shallow, useSettingsStore } from '../../stores'
 import ChatMessageItem from './ChatMessageItem'
 import { useCreation, useMemoizedFn, useThrottleFn } from 'ahooks'
 import { useSnackbar } from 'notistack'
@@ -120,6 +120,8 @@ export default function ChatPanel({ chat }: ChatMessageListProps) {
       shallow
     )
 
+  const followOutput = useSettingsStore((s) => s.ui.followOutput)
+
   const handleRegenerateMessage: chat_t.ChatStore['regenerateMessage'] =
     useMemoizedFn(async (p: { messageId: string; chatId: string }) => {
       const resp = await regenerateMessage({
@@ -176,6 +178,8 @@ export default function ChatPanel({ chat }: ChatMessageListProps) {
       [maxWidth]
     )
 
+  const atBottomRef = useRef(false)
+
   const { messages } = chat
 
   // have one dummy box
@@ -198,6 +202,9 @@ export default function ChatPanel({ chat }: ChatMessageListProps) {
         ref={virtuosoRef}
         style={{
           height: 'calc(100vh - 100px)',
+        }}
+        atBottomStateChange={(atBottom) => {
+          atBottomRef.current = atBottom
         }}
         components={virtuosoComponents}
         followOutput={'auto'}
@@ -227,7 +234,7 @@ export default function ChatPanel({ chat }: ChatMessageListProps) {
             />
           )
 
-          if (isLastMessage) {
+          if (isLastMessage && followOutput) {
             return (
               <ObserveMessageChange
                 message={message}

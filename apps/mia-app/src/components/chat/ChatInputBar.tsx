@@ -1,10 +1,4 @@
-import {
-  AutoAwesome,
-  Autorenew,
-  Reply,
-  Send,
-  SendOutlined,
-} from '@mui/icons-material'
+import { AutoAwesome, Reply, Send, SendOutlined } from '@mui/icons-material'
 import {
   Box,
   Paper,
@@ -14,12 +8,15 @@ import {
   Tooltip,
   Fab,
   Stack,
+  Checkbox,
+  Switch,
+  FormControlLabel,
 } from '@mui/material'
 import { useMemoizedFn } from 'ahooks'
 import { useSnackbar } from 'notistack'
 import { useState } from 'react'
 import { useIsMobile } from '../../hooks'
-import { shallow, useChatStore } from '../../stores'
+import { shallow, useChatStore, useSettingsStore } from '../../stores'
 import { Result } from '../../types'
 import { formatErrorUserFriendly } from '../../utils'
 
@@ -43,6 +40,19 @@ export function ChatInputBarDesktop({ chatId, onFocus }: ChatInputBarProps) {
     (s) => [s.autoReplyMessage, s.sendNewMessage, s.getChatTokens({ chatId })],
     shallow
   )
+
+  const [followOutput, toggleFollowOutput] = useSettingsStore(
+    (s) => [s.ui.followOutput, s.toggleFollowOutput],
+    shallow
+  )
+
+  const handleToggleFollowOutput = useMemoizedFn(() => {
+    if (!followOutput) {
+      onFocus?.()
+    }
+
+    toggleFollowOutput()
+  })
 
   const handleSendMessage = useMemoizedFn(async () => {
     const content = text.trim()
@@ -94,6 +104,7 @@ export function ChatInputBarDesktop({ chatId, onFocus }: ChatInputBarProps) {
         aria-label="input-bar-actions"
         alignItems="center"
         px={1}
+        gap={2}
       >
         <Tooltip title="Auto Reply">
           <IconButton
@@ -107,14 +118,33 @@ export function ChatInputBarDesktop({ chatId, onFocus }: ChatInputBarProps) {
           </IconButton>
         </Tooltip>
 
-        <Box
-          marginLeft="auto"
-          component="span"
-          fontStyle="italic"
-          fontSize="14px"
+        <Tooltip title="follow output">
+          <FormControlLabel
+            control={<Checkbox size="small" />}
+            label="follow"
+            labelPlacement="start"
+            value={followOutput}
+            onChange={handleToggleFollowOutput}
+          />
+        </Tooltip>
+
+        <Stack
+          sx={{
+            marginLeft: 'auto',
+          }}
+          direction="row"
+          alignItems="center"
+          gap={2}
         >
-          Tokens: {chatTokens.value?.totalTokens || 0}
-        </Box>
+          <Box
+            marginLeft="auto"
+            component="span"
+            fontStyle="italic"
+            fontSize="14px"
+          >
+            Tokens: {chatTokens.value?.totalTokens || 0}
+          </Box>
+        </Stack>
       </Stack>
       <Paper
         component="form"

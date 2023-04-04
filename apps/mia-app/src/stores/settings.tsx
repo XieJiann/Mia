@@ -7,6 +7,7 @@ import { getDefaultSettings, GetLoading, miaService } from '../backend/service'
 type SettingsStore = {
   ui: {
     mainDrawerOpened: boolean
+    followOutput: boolean
   }
 
   main: Settings
@@ -15,12 +16,15 @@ type SettingsStore = {
   openMainDrawer(): void
   closeMainDrawer(): void
   toggleMainDrawer(): void
+
+  toggleFollowOutput(): void
 }
 
 const settingsStoreCreator = immer<SettingsStore>((set, get) => {
   return {
     ui: {
       mainDrawerOpened: false,
+      followOutput: false,
     },
     main: getDefaultSettings(),
 
@@ -46,6 +50,12 @@ const settingsStoreCreator = immer<SettingsStore>((set, get) => {
     toggleMainDrawer() {
       set((s) => {
         s.ui.mainDrawerOpened = !s.ui.mainDrawerOpened
+      })
+    },
+
+    toggleFollowOutput() {
+      set((s) => {
+        s.ui.followOutput = !s.ui.followOutput
       })
     },
   }
