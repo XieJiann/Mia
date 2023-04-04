@@ -13,7 +13,6 @@ import PreviewImage from '../PreviewImage'
 // Source is from https://github.com/ztjhz/ChatGPTFreeApp/blob/HEAD/src/components/Chat/ChatContent/Message/MessageContent.tsx
 const ChatMessageContentViewImpl = React.memo(
   ({ content }: { content: string }) => {
-    const [codeCopied, setCodeCopied] = useState<boolean>(false)
     return (
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
@@ -30,16 +29,17 @@ const ChatMessageContentViewImpl = React.memo(
               />
             )
           },
-          // code({ node, inline, className, children, ...props }) )
           code({ node, inline, className, children, ...props }) {
+            const [codeCopied, setCodeCopied] = useState<boolean>(false)
+
             if (inline)
               return (
                 <Box component="code" sx={{ overflowX: 'auto' }}>
                   {children}
                 </Box>
               )
-            let highlight
 
+            let highlight
             const match = /language-(\w+)/.exec(className || '')
             const lang = match && match[1]
             // @see https://github.com/highlightjs/highlight.js/issues/2337
@@ -91,7 +91,6 @@ const ChatMessageContentViewImpl = React.memo(
                 <Box
                   sx={{
                     padding: '8px 8px',
-                    overflowY: 'auto',
                     border: '0px dashed gray',
                     borderTopWidth: '1px',
                     borderBottomWidth: '1px',
@@ -99,15 +98,18 @@ const ChatMessageContentViewImpl = React.memo(
                   }}
                 >
                   <Box
-                    component="div"
-                    sx={{ whiteSpace: 'pre !important' }}
+                    sx={{
+                      overflowX: 'auto',
+                      whiteSpace: 'pre !important',
+                      maxWidth: 'calc(min(80vw, 720px) - 20px)',
+                    }}
                     className={`hljs language-${highlight.language}`}
                     dangerouslySetInnerHTML={{
                       __html: DOMPurify.sanitize(highlight.value, {
                         USE_PROFILES: { html: true },
                       }),
                     }}
-                  ></Box>
+                  />
                 </Box>
               </Box>
             )

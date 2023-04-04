@@ -123,7 +123,6 @@ export function ChatInputBarDesktop({ chatId }: ChatInputBarProps) {
           display: 'flex',
           alignItems: 'flex-end',
           justifyContent: 'center',
-          backgroundColor: '#ffffff',
         }}
         elevation={1}
       >

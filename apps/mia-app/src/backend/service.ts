@@ -642,7 +642,7 @@ export class MiaService {
       }
     }
 
-    const prompt = `你需要根据聊天的一到两句话，为聊天取个标题，不超过十个字。标题的语言与文字的语言一致。这些话为：`
+    const prompt = `You need to come up with a title for the chat based on the following words, no more than ten words. The language of the title is consistent with the language of the text. These words are:`
 
     let content = prompt
 

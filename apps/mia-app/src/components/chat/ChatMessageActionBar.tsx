@@ -23,7 +23,6 @@ import {
 } from '@mui/icons-material'
 import { ChatStore } from '../../stores/chat'
 import CollpaseButton from '../forms/CollapseButton'
-import { useIsMobile } from '../../hooks'
 
 const ActionButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   (props, ref) => {

@@ -15,10 +15,13 @@ function ObserveHeight({
   throttle = 500,
 }: {
   children: React.ReactElement
-  onHeightChanged: (curHeight: number, prevHeight: number) => void
+  onHeightChanged: (
+    curRect: DOMRectReadOnly,
+    prevRect: DOMRectReadOnly | undefined
+  ) => void
   throttle?: number
 }) {
-  const prevHeight = useRef<number>(0)
+  const prevRect = useRef<DOMRectReadOnly | undefined>(undefined)
   const ref = useRef<HTMLDivElement>(null)
 
   const { run: handleHeightChanged } = useThrottleFn(onHeightChanged, {
@@ -32,9 +35,9 @@ function ObserveHeight({
     }
 
     const resizeObserver = new ResizeObserver((entries) => {
-      const newHeight = entries[0].contentRect.height
-      handleHeightChanged(newHeight, prevHeight.current)
-      prevHeight.current = newHeight
+      const newRect = entries[0].contentRect
+      handleHeightChanged(newRect, prevRect.current)
+      prevRect.current = { ...newRect }
     })
 
     resizeObserver.observe(el)
@@ -43,6 +46,44 @@ function ObserveHeight({
   }, [handleHeightChanged])
 
   return <Box ref={ref}>{children}</Box>
+}
+
+function ObserveMessageChange({
+  onScrollToBottom,
+  message,
+  children,
+}: {
+  onScrollToBottom: () => void
+  children: React.ReactElement
+  message: chat_t.ChatMessage
+}) {
+  const lastMessageRef = useRef<chat_t.ChatMessage | undefined>(undefined)
+
+  return (
+    <ObserveHeight
+      onHeightChanged={(cur, prev) => {
+        if (!prev) {
+          return
+        }
+
+        if (cur.height <= prev.height) {
+          return
+        }
+
+        if (
+          lastMessageRef.current &&
+          message.content.length != lastMessageRef.current.content.length
+        ) {
+          onScrollToBottom()
+        }
+
+        lastMessageRef.current = message
+      }}
+      throttle={0}
+    >
+      {children}
+    </ObserveHeight>
+  )
 }
 
 export interface ChatMessageListProps {
@@ -68,11 +109,20 @@ export default function ChatMessageList({
 
   const { enqueueSnackbar } = useSnackbar()
 
-  const handleScrollToButtom = () => {
-    if (virtuosoRef.current) {
-      virtuosoRef.current.scrollToIndex({ index: 'LAST' })
-    }
-  }
+  const { run: handleScrollToButtom } = useThrottleFn(
+    () => {
+      const virtuoso = virtuosoRef.current
+
+      if (virtuoso) {
+        virtuoso.scrollToIndex({
+          index: 'LAST',
+          align: 'end',
+          offset: 0,
+        })
+      }
+    },
+    { wait: 500 }
+  )
 
   const handleRegenerateMessage: chat_t.ChatStore['regenerateMessage'] =
     useMemoizedFn(async (p: { messageId: string; chatId: string }) => {
@@ -135,12 +185,12 @@ export default function ChatMessageList({
         height: 'calc(100vh - 100px)',
       }}
       components={virtuosoComponents}
-      followOutput={'auto'}
+      followOutput={true}
       initialTopMostItemIndex={messages.length - 1}
       totalCount={messages.length}
       overscan={{
-        main: 10,
-        reverse: 10,
+        main: 3200,
+        reverse: 3200,
       }}
       itemContent={(index) => {
         const isLast = index === messages.length - 1
@@ -159,18 +209,12 @@ export default function ChatMessageList({
 
         if (isLast) {
           return (
-            <ObserveHeight
-              onHeightChanged={(height, prevHeight) => {
-                // ignore first changes (when component is first mounted)
-                if (prevHeight <= 0) {
-                  return
-                }
-                // handleScrollToButtom()
-              }}
-              throttle={500}
+            <ObserveMessageChange
+              message={message}
+              onScrollToBottom={handleScrollToButtom}
             >
               {item}
-            </ObserveHeight>
+            </ObserveMessageChange>
           )
         }
 
